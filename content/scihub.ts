@@ -172,12 +172,17 @@ class Scihub {
   }
 
   public async updateItems(items: ZoteroItem[]): Promise<void> {
+    Zotero.debug(`scihub: updateItems called with ${items?.length ?? 0} items`)
     // WARN: Sequentially go through items, parallel will fail due to rate-limiting
     // Cycle needs to be broken if scihub asks for Captcha,
     // then user have to be redirected to the page to fill it in
     for (const item of items) {
-      // Skip items which are not processable
-      if (!item.isRegularItem() || item.isCollection()) { continue }
+      Zotero.debug(`scihub: processing item "${item.getField?.('title') ?? 'unknown'}"`)
+      // Skip items which are not processable (attachments, notes, etc.)
+      if (!item.isRegularItem()) {
+        Zotero.debug('scihub: skipping non-regular item')
+        continue
+      }
 
       // Skip items without DOI or if URL generation had failed
       const scihubUrl = this.generateScihubItemUrl(item)

@@ -2,7 +2,6 @@ import { ZoteroItem } from '../typings/zotero'
 
 const regularItem1: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'regularItemLibraryID1'
   public id = '1'
   public getField(f: string): any {
@@ -17,7 +16,6 @@ const regularItem1: ZoteroItem = new class {
 
 const regularItem2: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'regularItemLibraryID2'
   public id = '2'
   public getField(f: string): any {
@@ -30,9 +28,9 @@ const regularItem2: ZoteroItem = new class {
   }
 }
 
-const collectionItem: ZoteroItem = new class {
+// Item that is not a regular item (e.g., attachment, note)
+const nonRegularItem: ZoteroItem = new class {
   public isRegularItem() { return false }
-  public isCollection() { return true }
   public libraryID = 'regularItemLibraryID2'
   public id = '3'
   public getField(f: string): any {
@@ -47,7 +45,6 @@ const collectionItem: ZoteroItem = new class {
 
 const itemWithoutDOI: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'regularItemLibraryID2'
   public id = '4'
   public getField(f: string): any {
@@ -63,7 +60,6 @@ const itemWithoutDOI: ZoteroItem = new class {
 
 const DOIinExtraItem: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'regularItemLibraryID2'
   public id = '5'
   public getField(f: string): any {
@@ -79,7 +75,6 @@ const DOIinExtraItem: ZoteroItem = new class {
 
 const DOIinUrlItem: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'regularItemLibraryID2'
   public id = '6'
   public getField(f: string): any {
@@ -95,7 +90,6 @@ const DOIinUrlItem: ZoteroItem = new class {
 
 const captchaItem: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'regularItemLibraryID2'
   public id = '7'
   public getField(f: string): any {
@@ -111,7 +105,6 @@ const captchaItem: ZoteroItem = new class {
 
 const unavailableItem: ZoteroItem = new class {
   public isRegularItem() { return true }
-  public isCollection() { return false }
   public libraryID = 'unavailableItemLibraryID2'
   public id = '8'
   public getField(f: string): any {
@@ -124,4 +117,4 @@ const unavailableItem: ZoteroItem = new class {
   }
 }
 
-export { regularItem1, regularItem2, collectionItem, itemWithoutDOI, DOIinExtraItem, DOIinUrlItem, captchaItem, unavailableItem }
+export { regularItem1, regularItem2, nonRegularItem, itemWithoutDOI, DOIinExtraItem, DOIinUrlItem, captchaItem, unavailableItem }

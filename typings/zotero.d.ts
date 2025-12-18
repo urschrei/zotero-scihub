@@ -25,7 +25,6 @@ interface ZoteroItem {
   libraryID: string
   getField: (field: string, unformatted?: boolean, includeBaseMapped?: boolean) => string
   isRegularItem: () => boolean
-  isCollection: () => boolean
 }
 
 interface ProgressWindow {
@@ -42,6 +41,7 @@ interface IZotero {
   logError: (err: Error | string) => void
   launchURL: (url: string) => void
   getMainWindow: () => (Window & { document: Document; alert: (msg: string) => void }) | null
+  getActiveZoteroPane: () => IZoteroPane | null
   initialized: boolean
   setTimeout: (fn: () => void, ms: number) => number
   clearTimeout: (id: number) => void

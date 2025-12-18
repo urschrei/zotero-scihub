@@ -12,6 +12,7 @@ const Zotero: IZotero = new class {
   public logError(_err: Error | string) { return }
   public launchURL(_url: string) { return }
   public getMainWindow() { return null }
+  public getActiveZoteroPane() { return null }
   public setTimeout(fn: () => void, _ms: number) { fn(); return 1 }
   public clearTimeout(_id: number) { return }
 
