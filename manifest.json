@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Sci-Hub Plugin for Zotero",
-  "version": "1.4.4",
+  "version": "2.0.0",
   "description": "Download papers and books by DOI from Sci-Hub",
   "homepage_url": "https://github.com/ethanwillis/zotero-scihub",
   "author": "ethanwillis",

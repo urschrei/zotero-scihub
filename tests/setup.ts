@@ -1,4 +1,5 @@
 // Test setup - register mocks before tests run
+/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/unbound-method */
 import Module from 'module'
 
 // Store original require
@@ -18,7 +19,7 @@ const mockMenuManager = {
 }
 
 // Override require to intercept zotero-plugin-toolkit
-Module.prototype.require = function (id: string) {
+Module.prototype.require = function(id: string) {
   if (id === 'zotero-plugin-toolkit') {
     return mockMenuManager
   }
