@@ -1,43 +1,17 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <title>Sci-Hub Preferences</title>
-  <style>
-    .preference-row {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-    }
-    .preference-row label {
-      min-width: 180px;
-      margin-right: 10px;
-    }
-    .preference-row input[type="text"] {
-      flex: 1;
-      min-width: 200px;
-    }
-    .preference-row input[type="checkbox"] {
-      margin-right: 10px;
-    }
-    .section {
-      margin-bottom: 20px;
-    }
-  </style>
-</head>
-<body>
-  <div class="section">
-    <div class="preference-row">
-      <input type="checkbox" id="pref-automatic-pdf-download" />
-      <label for="pref-automatic-pdf-download">Automatic PDF Download</label>
-    </div>
-    <div class="preference-row">
-      <label for="pref-scihub-url">Sci-Hub URL:</label>
-      <input type="text" id="pref-scihub-url" />
-    </div>
-  </div>
-  <script>
-    // Initialize preference values when pane loads
+<vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+      xmlns:html="http://www.w3.org/1999/xhtml">
+  <groupbox>
+    <label><html:h2>Sci-Hub Settings</html:h2></label>
+    <hbox align="center" style="margin: 10px 0;">
+      <checkbox id="pref-automatic-pdf-download"
+                label="Automatic PDF Download"/>
+    </hbox>
+    <hbox align="center" style="margin: 10px 0;">
+      <label value="Sci-Hub URL:" style="margin-right: 10px;"/>
+      <html:input type="text" id="pref-scihub-url" style="flex: 1; min-width: 200px;"/>
+    </hbox>
+  </groupbox>
+  <script><![CDATA[
     (function() {
       const automaticCheckbox = document.getElementById('pref-automatic-pdf-download');
       const urlInput = document.getElementById('pref-scihub-url');
@@ -47,7 +21,7 @@
       urlInput.value = Zotero.Prefs.get('zoteroscihub.scihub_url') ?? 'https://sci-hub.ru/';
 
       // Save on change
-      automaticCheckbox.addEventListener('change', function() {
+      automaticCheckbox.addEventListener('command', function() {
         Zotero.Prefs.set('zoteroscihub.automatic_pdf_download', this.checked);
       });
 
@@ -55,6 +29,5 @@
         Zotero.Prefs.set('zoteroscihub.scihub_url', this.value);
       });
     })();
-  </script>
-</body>
-</html>
+  ]]></script>
+</vbox>
