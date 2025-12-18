@@ -1,11 +1,11 @@
 // Bootstrap file for Zotero 7/8 plugin architecture
 // This file handles plugin lifecycle: startup, shutdown, window load/unload
 
-declare const Components: any
+declare const Cc: any
+declare const Ci: any
 declare const Services: any
+declare const Zotero: any
 
-// These are injected by Zotero when loading the bootstrap
-let Zotero: any
 let chromeHandle: any
 
 const BOOTSTRAP_REASONS: Record<number, string> = {
@@ -19,63 +19,80 @@ const BOOTSTRAP_REASONS: Record<number, string> = {
   8: 'ADDON_DOWNGRADE',
 }
 
-const POLL_INTERVAL = 100
+function log(msg: string): void {
+  if (Zotero?.debug) {
+    Zotero.debug(`Scihub bootstrap: ${msg}`)
+  }
+}
 
-// Called when the plugin is installed or enabled
+// Called when the plugin is installed (required by Zotero)
+export function install(): void {
+  log('install, nothing to do')
+}
+
+// Called when the plugin is uninstalled (required by Zotero)
+export function uninstall(): void {
+  log('uninstall, nothing to do')
+}
+
+// Called when the plugin starts
 export async function startup({ resourceURI, rootURI = resourceURI.spec }: {
   id: string
   version: string
   resourceURI: { spec: string }
   rootURI?: string
 }, reason: number): Promise<void> {
-  // Wait for Zotero to be ready
-  await waitForZotero()
+  try {
+    log('startup started')
 
-  // Store Zotero reference
-  Zotero = Components.classes['@zotero.org/Zotero;1']
-    .getService(Components.interfaces.nsISupports)
-    .wrappedJSObject
+    // Register chrome resources with RELATIVE paths
+    // Note: Only 'content' and 'locale' are supported by registerChrome
+    const aomStartup = Cc['@mozilla.org/addons/addon-manager-startup;1']
+      .getService(Ci.amIAddonManagerStartup)
+    const manifestURI = Services.io.newURI(`${rootURI}manifest.json`)
+    chromeHandle = aomStartup.registerChrome(manifestURI, [
+      ['content', 'zotero-scihub', 'content/'],
+      ['locale', 'zotero-scihub', 'en-US', 'locale/en-US/'],
+    ])
 
-  // Register chrome resources
-  const aomStartup = Components.classes['@mozilla.org/addons/addon-manager-startup;1']
-    .getService(Components.interfaces.amIAddonManagerStartup)
+    // Load the main plugin script
+    Services.scriptloader.loadSubScriptWithOptions(
+      `${rootURI}content/scihub.js`,
+      {
+        target: {
+          Zotero,
+          rootURI,
+          setTimeout,
+          clearTimeout,
+        },
+      }
+    )
 
-  const manifestURI = Services.io.newURI(`${rootURI}manifest.json`)
-  chromeHandle = aomStartup.registerChrome(manifestURI, [
-    ['content', 'zotero-scihub', `${rootURI}content/`],
-    ['locale', 'zotero-scihub', 'en-US', `${rootURI}locale/en-US/`],
-    ['skin', 'zotero-scihub', 'default', `${rootURI}skin/default/`],
-  ])
+    // Register preference pane
+    await Zotero.PreferencePanes.register({
+      pluginID: 'zotero-scihub@example.com',
+      src: `${rootURI}content/preferences.xhtml`,
+      label: 'Sci-Hub',
+      image: `${rootURI}skin/default/sci-hub-logo.svg`,
+    })
 
-  // Load the main plugin script
-  Services.scriptloader.loadSubScriptWithOptions(
-    `${rootURI}content/scihub.js`,
-    {
-      target: {
-        Zotero,
-        rootURI,
-        // Provide timer functions for async operations
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-        setTimeout: (fn: () => void, ms: number): number => Zotero.setTimeout(fn, ms),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-        clearTimeout: (timerId: number): void => Zotero.clearTimeout(timerId),
-      },
-      ignoreCache: true,
+    // Initialize the plugin
+    await Zotero.Scihub.startup(BOOTSTRAP_REASONS[reason])
+
+    // If main window is already open, call onMainWindowLoad now
+    const win = Zotero.getMainWindow()
+    if (win) {
+      log('main window already open, calling onMainWindowLoad')
+      Zotero.Scihub.onMainWindowLoad(win)
     }
-  )
 
-  // Register preference pane
-  await Zotero.PreferencePanes.register({
-    pluginID: 'zotero-scihub@example.com',
-    src: `${rootURI}content/preferences.xhtml`,
-    label: 'Sci-Hub',
-    image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-  })
-
-  // Initialize the plugin
-  await Zotero.Scihub.startup(BOOTSTRAP_REASONS[reason])
-
-  Zotero.debug('Scihub: Plugin started')
+    log('startup done')
+  } catch (err) {
+    log(`startup failed: ${err}`)
+    if (Zotero?.logError) {
+      Zotero.logError(err)
+    }
+  }
 }
 
 // Called when the plugin is disabled or uninstalled
@@ -85,10 +102,10 @@ export function shutdown(_data: {
   resourceURI: { spec: string }
   rootURI?: string
 }, _reason: number): void {
-  Zotero.debug('Scihub: Plugin shutting down')
+  log('shutdown')
 
   // Unload the plugin
-  if (Zotero.Scihub) {
+  if (Zotero?.Scihub) {
     Zotero.Scihub.shutdown()
   }
 
@@ -99,38 +116,23 @@ export function shutdown(_data: {
   }
 
   // Clear Zotero.Scihub namespace
-  delete Zotero.Scihub
+  if (Zotero?.Scihub) {
+    delete Zotero.Scihub
+  }
 }
 
 // Called when the main Zotero window loads
 export function onMainWindowLoad({ window: win }: { window: Window }): void {
-  if (Zotero.Scihub) {
+  log('onMainWindowLoad')
+  if (Zotero?.Scihub) {
     Zotero.Scihub.onMainWindowLoad(win)
   }
 }
 
 // Called when the main Zotero window unloads
 export function onMainWindowUnload({ window: win }: { window: Window }): void {
-  if (Zotero.Scihub) {
+  log('onMainWindowUnload')
+  if (Zotero?.Scihub) {
     Zotero.Scihub.onMainWindowUnload(win)
   }
-}
-
-// Helper function to wait for Zotero to be ready
-async function waitForZotero(): Promise<void> {
-  if (typeof Zotero !== 'undefined' && Zotero.initialized) {
-    return
-  }
-
-  // Wait for Zotero to be available and initialized
-  await new Promise<void>(resolve => {
-    const checkZotero = () => {
-      if (typeof Zotero !== 'undefined' && Zotero.initialized) {
-        resolve()
-      } else {
-        setTimeout(checkZotero, POLL_INTERVAL)
-      }
-    }
-    checkZotero()
-  })
 }

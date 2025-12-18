@@ -105,6 +105,8 @@ async function build() {
     footer: {
       js: `
 // Export bootstrap functions for Zotero
+var install = ScihubBootstrap.install;
+var uninstall = ScihubBootstrap.uninstall;
 var startup = ScihubBootstrap.startup;
 var shutdown = ScihubBootstrap.shutdown;
 var onMainWindowLoad = ScihubBootstrap.onMainWindowLoad;

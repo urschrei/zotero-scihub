@@ -97,35 +97,47 @@ class Scihub {
 
   // Register context menu items using MenuManager
   private registerMenus(_win: Window): void {
-    // Register item context menu item
-    Menu.register('item', {
-      tag: 'menuitem',
-      id: 'zotero-itemmenu-scihub',
-      label: 'Update Sci-Hub PDF',
-      icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-      commandListener: () => { void this.ItemPane.updateSelectedItems() },
-    })
-    this.menuIds.push('zotero-itemmenu-scihub')
+    try {
+      Zotero.debug('Scihub: registering menus...')
 
-    // Register collection context menu item
-    Menu.register('collection', {
-      tag: 'menuitem',
-      id: 'zotero-collectionmenu-scihub',
-      label: 'Update Collection Sci-Hub PDFs',
-      icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-      commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
-    })
-    this.menuIds.push('zotero-collectionmenu-scihub')
+      // Register item context menu item
+      Menu.register('item', {
+        tag: 'menuitem',
+        id: 'zotero-itemmenu-scihub',
+        label: 'Update Sci-Hub PDF',
+        icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+        commandListener: () => { void this.ItemPane.updateSelectedItems() },
+      })
+      this.menuIds.push('zotero-itemmenu-scihub')
+      Zotero.debug('Scihub: registered item menu')
 
-    // Register tools menu item
-    Menu.register('menuTools', {
-      tag: 'menuitem',
-      id: 'zotero-scihub-tools-updateall',
-      label: 'Update All Sci-Hub PDFs',
-      icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-      commandListener: () => { void this.ToolsPane.updateAll() },
-    })
-    this.menuIds.push('zotero-scihub-tools-updateall')
+      // Register collection context menu item
+      Menu.register('collection', {
+        tag: 'menuitem',
+        id: 'zotero-collectionmenu-scihub',
+        label: 'Update Collection Sci-Hub PDFs',
+        icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+        commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
+      })
+      this.menuIds.push('zotero-collectionmenu-scihub')
+      Zotero.debug('Scihub: registered collection menu')
+
+      // Register tools menu item
+      Menu.register('menuTools', {
+        tag: 'menuitem',
+        id: 'zotero-scihub-tools-updateall',
+        label: 'Update All Sci-Hub PDFs',
+        icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+        commandListener: () => { void this.ToolsPane.updateAll() },
+      })
+      this.menuIds.push('zotero-scihub-tools-updateall')
+      Zotero.debug('Scihub: registered tools menu')
+
+      Zotero.debug('Scihub: all menus registered successfully')
+    } catch (err) {
+      Zotero.logError(err as Error)
+      Zotero.debug(`Scihub: menu registration failed: ${err}`)
+    }
   }
 
   // Unregister all menu items
