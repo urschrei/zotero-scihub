@@ -18,10 +18,7 @@ export abstract class ZoteroUtil {
       referrer: '',
       cookieSandbox: null,
     }
-    Zotero.debug(`Import Options: ${JSON.stringify(importOptions, null, '\t')}`)
-
-    const result = await Zotero.Attachments.importFromURL(importOptions)
-    Zotero.debug(`Import result: ${JSON.stringify(result)}`)
+    await Zotero.Attachments.importFromURL(importOptions)
   }
 
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers

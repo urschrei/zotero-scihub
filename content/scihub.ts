@@ -98,8 +98,6 @@ class Scihub {
   // Register context menu items using MenuManager
   private registerMenus(_win: Window): void {
     try {
-      Zotero.debug('Scihub: registering menus...')
-
       // Register item context menu item
       Menu.register('item', {
         tag: 'menuitem',
@@ -109,7 +107,6 @@ class Scihub {
         commandListener: () => { void this.ItemPane.updateSelectedItems() },
       })
       this.menuIds.push('zotero-itemmenu-scihub')
-      Zotero.debug('Scihub: registered item menu')
 
       // Register collection context menu item
       Menu.register('collection', {
@@ -120,7 +117,6 @@ class Scihub {
         commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
       })
       this.menuIds.push('zotero-collectionmenu-scihub')
-      Zotero.debug('Scihub: registered collection menu')
 
       // Register tools menu item
       Menu.register('menuTools', {
@@ -131,12 +127,8 @@ class Scihub {
         commandListener: () => { void this.ToolsPane.updateAll() },
       })
       this.menuIds.push('zotero-scihub-tools-updateall')
-      Zotero.debug('Scihub: registered tools menu')
-
-      Zotero.debug('Scihub: all menus registered successfully')
     } catch (err) {
       Zotero.logError(err as Error)
-      Zotero.debug(`Scihub: menu registration failed: ${err}`)
     }
   }
 
@@ -172,15 +164,12 @@ class Scihub {
   }
 
   public async updateItems(items: ZoteroItem[]): Promise<void> {
-    Zotero.debug(`scihub: updateItems called with ${items?.length ?? 0} items`)
     // WARN: Sequentially go through items, parallel will fail due to rate-limiting
     // Cycle needs to be broken if scihub asks for Captcha,
     // then user have to be redirected to the page to fill it in
     for (const item of items) {
-      Zotero.debug(`scihub: processing item "${item.getField?.('title') ?? 'unknown'}"`)
       // Skip items which are not processable (attachments, notes, etc.)
       if (!item.isRegularItem()) {
-        Zotero.debug('scihub: skipping non-regular item')
         continue
       }
 
@@ -223,8 +212,52 @@ class Scihub {
       responseType: 'document',
       headers: { 'User-Agent': userAgent },
     })
-    // older .tf domains have iframe element, newer .st domain have embed element
-    const rawPdfUrl = xhr.responseXML?.querySelector('#pdf')?.getAttribute('src')
+
+    // Try multiple selectors - sci-hub uses different elements across domains
+    // Current sci-hub (2024+) uses <object type="application/pdf" data="...">
+    // Older versions used #pdf, embed, or iframe with src attribute
+    let rawPdfUrl: string | null | undefined = null
+
+    // Try object tag first (current sci-hub 2024+ structure)
+    const objectElement = xhr.responseXML?.querySelector('object[type="application/pdf"]')
+    if (objectElement) {
+      rawPdfUrl = objectElement.getAttribute('data')
+      // Remove URL fragment (e.g., #navpanes=0&view=FitH)
+      if (rawPdfUrl?.includes('#')) {
+        rawPdfUrl = rawPdfUrl.split('#')[0]
+      }
+    }
+
+    // Try download link
+    if (!rawPdfUrl) {
+      const downloadLink = xhr.responseXML?.querySelector('.download a[href*=".pdf"]') ||
+                           xhr.responseXML?.querySelector('a[href*="/download/"]')
+      if (downloadLink) {
+        rawPdfUrl = downloadLink.getAttribute('href')
+      }
+    }
+
+    // Try legacy selectors (older sci-hub versions)
+    if (!rawPdfUrl) {
+      const pdfElement = xhr.responseXML?.querySelector('#pdf') ||
+                         xhr.responseXML?.querySelector('embed[src*=".pdf"]') ||
+                         xhr.responseXML?.querySelector('iframe[src*=".pdf"]') ||
+                         xhr.responseXML?.querySelector('embed') ||
+                         xhr.responseXML?.querySelector('iframe')
+      rawPdfUrl = pdfElement?.getAttribute('src')
+    }
+
+    // Fallback: regex search in HTML
+    if (!rawPdfUrl) {
+      const bodyHtml = xhr.responseXML?.body?.innerHTML ?? ''
+      const pdfUrlMatch = bodyHtml.match(/data\s*=\s*['"]([^'"]*\.pdf[^'"]*)['"]/i) ||
+                          bodyHtml.match(/href\s*=\s*['"]([^'"]*\/download\/[^'"]*\.pdf)['"]/i) ||
+                          bodyHtml.match(/(?:src|href)\s*=\s*['"]([^'"]*\.pdf[^'"]*)['"]/i)
+      if (pdfUrlMatch) {
+        rawPdfUrl = pdfUrlMatch[1]
+      }
+    }
+
     let pdfUrl = rawPdfUrl
     if (rawPdfUrl !== undefined && (!rawPdfUrl?.startsWith('http') && !rawPdfUrl?.startsWith('//'))) {
       pdfUrl = `${this.getBaseScihubUrl()}${rawPdfUrl}`
@@ -240,7 +273,7 @@ class Scihub {
       throw new PdfNotFoundError(`Pdf is not available: ${scihubUrl}`)
     } else {
       Zotero.debug(`scihub: failed to fetch PDF from "${scihubUrl}"`)
-      throw new Error(xhr.statusText)
+      throw new Error(`PDF not found in page (status: ${statusCode})`)
     }
   }
 

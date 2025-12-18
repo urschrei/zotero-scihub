@@ -7,13 +7,9 @@ function getZoteroPane(): IZoteroPane | null {
 }
 
 class ItemPane {
-  public async updateSelectedEntity(libraryId: string): Promise<void> {
-    Zotero.debug(`scihub: updating items in entity ${libraryId}`)
+  public async updateSelectedEntity(_libraryId: string): Promise<void> {
     const zoteroPane = getZoteroPane()
-    if (!zoteroPane) {
-      Zotero.debug('scihub: ZoteroPane not available')
-      return
-    }
+    if (!zoteroPane) return
 
     if (!zoteroPane.canEdit()) {
       zoteroPane.displayCannotEditLibraryMessage()
@@ -28,23 +24,15 @@ class ItemPane {
   }
 
   public async updateSelectedItems(): Promise<void> {
-    Zotero.debug('scihub: updating selected items')
     try {
       const zoteroPane = getZoteroPane()
-      if (!zoteroPane) {
-        Zotero.debug('scihub: ZoteroPane not available')
-        return
-      }
+      if (!zoteroPane) return
 
       const items = zoteroPane.getSelectedItems()
-      Zotero.debug(`scihub: found ${items?.length ?? 0} selected items`)
       if (items && items.length > 0) {
         await Zotero.Scihub.updateItems(items)
-      } else {
-        Zotero.debug('scihub: no items selected')
       }
     } catch (err) {
-      Zotero.debug(`scihub: error getting selected items: ${err}`)
       Zotero.logError(err as Error)
     }
   }
