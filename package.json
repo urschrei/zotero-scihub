@@ -42,7 +42,7 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "chai": "^4.3.4",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.27.2",
     "eslint": "^8.57.0",
     "eslint-plugin-import": "^2.23.4",
     "eslint-plugin-jsdoc": "^48.0.0",
