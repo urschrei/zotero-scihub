@@ -4,10 +4,14 @@ import { ToolsPane } from './toolsPane'
 import { PrefPane } from './prefPane'
 import { UrlUtil } from './urlUtil'
 import { ZoteroUtil } from './zoteroUtil'
+import { MenuManager } from 'zotero-plugin-toolkit'
 
 declare const Zotero: IZotero
 declare const window: Window | undefined
 declare const rootURI: string | undefined
+
+// Menu manager for Zotero 7/8
+const Menu = new MenuManager()
 
 enum HttpCodes {
   DONE = 200,
@@ -91,81 +95,42 @@ class Scihub {
     this.initialized = false
   }
 
-  // Register context menu items
-  private registerMenus(win: Window): void {
-    const doc = win.document
-
+  // Register context menu items using MenuManager
+  private registerMenus(_win: Window): void {
     // Register item context menu item
-    this.addMenuItem(doc, 'zotero-itemmenu', {
+    Menu.register('item', {
+      tag: 'menuitem',
       id: 'zotero-itemmenu-scihub',
       label: 'Update Sci-Hub PDF',
-      image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-      oncommand: () => { void this.ItemPane.updateSelectedItems() },
+      icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+      commandListener: () => { void this.ItemPane.updateSelectedItems() },
     })
+    this.menuIds.push('zotero-itemmenu-scihub')
 
     // Register collection context menu item
-    this.addMenuItem(doc, 'zotero-collectionmenu', {
+    Menu.register('collection', {
+      tag: 'menuitem',
       id: 'zotero-collectionmenu-scihub',
       label: 'Update Collection Sci-Hub PDFs',
-      image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-      oncommand: () => { void this.ItemPane.updateSelectedEntity('') },
+      icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+      commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
     })
+    this.menuIds.push('zotero-collectionmenu-scihub')
 
     // Register tools menu item
-    this.addMenuItem(doc, 'menu_ToolsPopup', {
+    Menu.register('menuTools', {
+      tag: 'menuitem',
       id: 'zotero-scihub-tools-updateall',
       label: 'Update All Sci-Hub PDFs',
-      image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
-      oncommand: () => { void this.ToolsPane.updateAll() },
+      icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+      commandListener: () => { void this.ToolsPane.updateAll() },
     })
-  }
-
-  // Add a menu item to a popup menu
-  private addMenuItem(
-    doc: Document,
-    popupId: string,
-    options: {
-      id: string
-      label: string
-      image?: string
-      oncommand: () => void
-    }
-  ): void {
-    const popup = doc.getElementById(popupId)
-    if (!popup) {
-      Zotero.debug(`Scihub: popup ${popupId} not found`)
-      return
-    }
-
-    // Add separator before our item
-    const separator = doc.createXULElement('menuseparator')
-    separator.id = `${options.id}-separator`
-    popup.appendChild(separator)
-
-    // Create menu item
-    const menuitem = doc.createXULElement('menuitem')
-    menuitem.id = options.id
-    menuitem.setAttribute('label', options.label)
-    menuitem.classList.add('menuitem-iconic')
-    if (options.image) {
-      menuitem.setAttribute('image', options.image)
-    }
-    menuitem.addEventListener('command', options.oncommand)
-    popup.appendChild(menuitem)
-
-    // Track for cleanup
-    this.menuIds.push(options.id)
-    this.menuIds.push(`${options.id}-separator`)
+    this.menuIds.push('zotero-scihub-tools-updateall')
   }
 
   // Unregister all menu items
   private unregisterMenus(): void {
-    for (const id of this.menuIds) {
-      const element = Zotero.getMainWindow()?.document.getElementById(id)
-      if (element) {
-        element.remove()
-      }
-    }
+    Menu.unregisterAll()
     this.menuIds = []
   }
 
