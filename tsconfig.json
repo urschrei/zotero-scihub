@@ -3,8 +3,7 @@
     "importHelpers": true,
     "target": "ES2022",
     "disableSizeLimit": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "commonjs",
     "esModuleInterop": true,
     "removeComments": false,
     "preserveConstEnums": false,
@@ -18,10 +17,8 @@
     "lib": ["ES2022", "DOM"],
     "typeRoots": [
       "./typings",
-      "./node_modules/@types",
-      "./node_modules/zotero-types"
-    ],
-    "types": ["zotero-types"]
+      "./node_modules/@types"
+    ]
   },
   "include": [
     "content/**/*",

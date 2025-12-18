@@ -11,7 +11,7 @@ import { Zotero, progressWindowSpy } from './zotero.mock'
 import { collectionItem, itemWithoutDOI, regularItem1, regularItem2, DOIinExtraItem, DOIinUrlItem, captchaItem, unavailableItem } from './zoteroItem.mock'
 globalThis.Zotero = Zotero
 // Since there is catch-all in the code which raises alerts
-globalThis.alert = m => { throw new Error(m) }
+globalThis.alert = (m: string) => { throw new Error(m) }
 
 import { Scihub } from '../content/scihub'
 Zotero.Scihub = new Scihub()

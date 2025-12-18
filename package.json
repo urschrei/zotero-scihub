@@ -6,11 +6,12 @@
     "lint": "eslint . --ext .ts --cache --cache-location .eslintcache/",
     "prebuild": "npm run lint",
     "build": "tsc --noEmit && node esbuild.js",
-    "postbuild": "zotero-plugin-zipup build zotero-scihub",
+    "postbuild": "cd build && zip -r ../zotero-scihub.xpi . -x '*.DS_Store'",
     "release": "zotero-plugin-release",
     "postversion": "git push --follow-tags",
     "test": "nyc mocha -r ts-node/register 'tests/**/*.ts'",
-    "coverage": "nyc -r lcov npm run test"
+    "coverage": "nyc -r lcov npm run test",
+    "clean": "rm -rf build zotero-scihub.xpi"
   },
   "repository": {
     "type": "git",
@@ -37,14 +38,14 @@
     "@istanbuljs/nyc-config-typescript": "^1.0.1",
     "@types/chai": "^4.2.21",
     "@types/mocha": "^8.2.3",
-    "@types/node": "^16.4.1",
-    "@typescript-eslint/eslint-plugin": "^4.28.3",
-    "@typescript-eslint/parser": "^4.28.3",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "chai": "^4.3.4",
     "esbuild": "^0.24.0",
-    "eslint": "^7.30.0",
+    "eslint": "^8.57.0",
     "eslint-plugin-import": "^2.23.4",
-    "eslint-plugin-jsdoc": "^35.4.3",
+    "eslint-plugin-jsdoc": "^48.0.0",
     "eslint-plugin-prefer-arrow": "^1.2.3",
     "jsdom": "^17.0.0",
     "mkdirp": "^1.0.4",
@@ -55,7 +56,7 @@
     "source-map-support": "^0.5.19",
     "ts-node": "^10.1.0",
     "typescript": "^5.3.3",
-    "zotero-plugin": "^4.0.5",
-    "zotero-types": "^2.2.0"
+    "zotero-plugin": "^8.0.4",
+    "zotero-types": "^4.0.5"
   }
 }

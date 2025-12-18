@@ -6,7 +6,8 @@ import { UrlUtil } from './urlUtil'
 import { ZoteroUtil } from './zoteroUtil'
 
 declare const Zotero: IZotero
-declare const window
+declare const window: Window | undefined
+declare const rootURI: string | undefined
 
 enum HttpCodes {
   DONE = 200,
@@ -26,18 +27,19 @@ class ItemObserver implements ZoteroObserver {
     const automaticPdfDownload = Zotero.Scihub.isAutomaticPdfDownload()
 
     if (event === 'add' && automaticPdfDownload) {
-      const items = await Zotero.Items.getAsync(ids)
+      const items = await Zotero.Items.getAsync(ids) as ZoteroItem[]
       await Zotero.Scihub.updateItems(items)
     }
   }
 }
 
 class Scihub {
-  // TOOD: only bulk-update items which are missing paper attachement
+  // TODO: only bulk-update items which are missing paper attachment
   private static readonly DEFAULT_SCIHUB_URL = 'https://sci-hub.ru/'
   private static readonly DEFAULT_AUTOMATIC_PDF_DOWNLOAD = true
   private observerId: number | null = null
   private initialized = false
+  private menuIds: string[] = []
   public ItemPane: ItemPane
   public PrefPane: PrefPane
   public ToolsPane: ToolsPane
@@ -46,6 +48,125 @@ class Scihub {
     this.ItemPane = new ItemPane()
     this.PrefPane = new PrefPane()
     this.ToolsPane = new ToolsPane()
+  }
+
+  // Called by bootstrap.ts on plugin startup
+  public startup(reason: string): void {
+    Zotero.debug(`Scihub: startup (${reason})`)
+    this.registerObserver()
+  }
+
+  // Called by bootstrap.ts on plugin shutdown
+  public shutdown(): void {
+    Zotero.debug('Scihub: shutdown')
+    this.unregisterObserver()
+    this.unregisterMenus()
+  }
+
+  // Called when main Zotero window loads
+  public onMainWindowLoad(win: Window): void {
+    Zotero.debug('Scihub: main window loaded')
+    this.registerMenus(win)
+  }
+
+  // Called when main Zotero window unloads
+  public onMainWindowUnload(_win: Window): void {
+    Zotero.debug('Scihub: main window unloading')
+    this.unregisterMenus()
+  }
+
+  // Register the item observer for automatic PDF downloads
+  private registerObserver(): void {
+    if (this.initialized) return
+    this.observerId = Zotero.Notifier.registerObserver(new ItemObserver(), ['item'], 'Scihub')
+    this.initialized = true
+  }
+
+  // Unregister the item observer
+  private unregisterObserver(): void {
+    if (this.observerId) {
+      Zotero.Notifier.unregisterObserver(this.observerId)
+      this.observerId = null
+    }
+    this.initialized = false
+  }
+
+  // Register context menu items
+  private registerMenus(win: Window): void {
+    const doc = win.document
+
+    // Register item context menu item
+    this.addMenuItem(doc, 'zotero-itemmenu', {
+      id: 'zotero-itemmenu-scihub',
+      label: 'Update Sci-Hub PDF',
+      image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+      oncommand: () => { void this.ItemPane.updateSelectedItems() },
+    })
+
+    // Register collection context menu item
+    this.addMenuItem(doc, 'zotero-collectionmenu', {
+      id: 'zotero-collectionmenu-scihub',
+      label: 'Update Collection Sci-Hub PDFs',
+      image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+      oncommand: () => { void this.ItemPane.updateSelectedEntity('') },
+    })
+
+    // Register tools menu item
+    this.addMenuItem(doc, 'menu_ToolsPopup', {
+      id: 'zotero-scihub-tools-updateall',
+      label: 'Update All Sci-Hub PDFs',
+      image: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+      oncommand: () => { void this.ToolsPane.updateAll() },
+    })
+  }
+
+  // Add a menu item to a popup menu
+  private addMenuItem(
+    doc: Document,
+    popupId: string,
+    options: {
+      id: string
+      label: string
+      image?: string
+      oncommand: () => void
+    }
+  ): void {
+    const popup = doc.getElementById(popupId)
+    if (!popup) {
+      Zotero.debug(`Scihub: popup ${popupId} not found`)
+      return
+    }
+
+    // Add separator before our item
+    const separator = doc.createXULElement('menuseparator')
+    separator.id = `${options.id}-separator`
+    popup.appendChild(separator)
+
+    // Create menu item
+    const menuitem = doc.createXULElement('menuitem')
+    menuitem.id = options.id
+    menuitem.setAttribute('label', options.label)
+    menuitem.classList.add('menuitem-iconic')
+    if (options.image) {
+      menuitem.setAttribute('image', options.image)
+    }
+    menuitem.addEventListener('command', options.oncommand)
+    popup.appendChild(menuitem)
+
+    // Track for cleanup
+    this.menuIds.push(options.id)
+    this.menuIds.push(`${options.id}-separator`)
+  }
+
+  // Unregister all menu items
+  private unregisterMenus(): void {
+    for (const id of this.menuIds) {
+      const element = Zotero.getMainWindow()?.document.getElementById(id)
+      if (element) {
+        element.remove()
+      }
+    }
+    this.menuIds = []
   }
 
   public getBaseScihubUrl(): string {
@@ -64,17 +185,13 @@ class Scihub {
     return Zotero.Prefs.get('zoteroscihub.automatic_pdf_download') as boolean
   }
 
+  // Legacy methods - kept for compatibility but no longer used
   public load(): void {
-    // Register the callback in Zotero as an item observer
-    if (this.initialized) return
-    this.observerId = Zotero.Notifier.registerObserver(new ItemObserver(), ['item'], 'Scihub')
-    this.initialized = true
+    this.registerObserver()
   }
 
   public unload(): void {
-    if (this.observerId) {
-      Zotero.Notifier.unregisterObserver(this.observerId)
-    }
+    this.unregisterObserver()
   }
 
   public async updateItems(items: ZoteroItem[]): Promise<void> {
@@ -102,7 +219,8 @@ class Scihub {
           continue
         } else {
           // Break if Captcha is reached, alert user and redirect
-          alert(
+          const alertFn = Zotero.getMainWindow()?.alert || alert
+          alertFn(
             `Captcha is required or PDF is not ready yet for "${item.getField('title')}".\n\
             You will be redirected to the scihub page.\n\
             Restart fetching process manually.\n\
@@ -117,7 +235,12 @@ class Scihub {
   private async updateItem(scihubUrl: URL, item: ZoteroItem) {
     ZoteroUtil.showPopup('Fetching PDF', item.getField('title'))
 
-    const xhr = await Zotero.HTTP.request('GET', scihubUrl.href, { responseType: 'document', headers:{'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'} })
+    const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) ' +
+      'AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'
+    const xhr = await Zotero.HTTP.request('GET', scihubUrl.href, {
+      responseType: 'document',
+      headers: { 'User-Agent': userAgent },
+    })
     // older .tf domains have iframe element, newer .st domain have embed element
     const rawPdfUrl = xhr.responseXML?.querySelector('#pdf')?.getAttribute('src')
     let pdfUrl = rawPdfUrl
@@ -125,11 +248,12 @@ class Scihub {
       pdfUrl = `${this.getBaseScihubUrl()}${rawPdfUrl}`
     }
     const body = xhr.responseXML?.querySelector('body')
+    const statusCode: number = xhr.status
 
-    if (xhr.status === HttpCodes.DONE && pdfUrl) {
+    if (statusCode === (HttpCodes.DONE as number) && pdfUrl) {
       const httpsUrl = UrlUtil.urlToHttps(pdfUrl)
       await ZoteroUtil.attachRemotePDFToItem(httpsUrl, item)
-    } else if (xhr.status === HttpCodes.DONE && this.isPdfNotAvailable(body)) {
+    } else if (statusCode === (HttpCodes.DONE as number) && this.isPdfNotAvailable(body)) {
       Zotero.debug(`scihub: PDF is not available at the moment "${scihubUrl}"`)
       throw new PdfNotFoundError(`Pdf is not available: ${scihubUrl}`)
     } else {
@@ -168,7 +292,7 @@ class Scihub {
     const extra = item.getField('extra')
     const match = extra?.match(/^DOI: (.+)$/m)
     if (match) {
-      return match[1] as string
+      return match[1]
     }
     return null
   }
@@ -196,8 +320,10 @@ class Scihub {
 
 Zotero.Scihub = new Scihub()
 
-// Check fails in testing environment
-if (typeof window !== 'undefined') {
+// Legacy initialization for Zotero 6 compatibility (if XUL overlays are still used)
+// In Zotero 7/8, initialization is handled by bootstrap.ts
+if (typeof window !== 'undefined' && typeof rootURI === 'undefined') {
+  // Only attach listeners in legacy mode (non-bootstrap)
   window.addEventListener('load', _ => {
     Zotero.Scihub.load()
   }, false)
