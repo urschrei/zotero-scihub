@@ -7,7 +7,7 @@
     "prebuild": "npm run lint",
     "build": "tsc --noEmit && node esbuild.js",
     "postbuild": "cd build && zip -r ../zotero-scihub.xpi . -x '*.DS_Store'",
-    "release": "zotero-plugin-release",
+    "release": "zp-release",
     "postversion": "git push --follow-tags",
     "test": "nyc mocha -r ts-node/register -r tests/setup.ts 'tests/**/*.ts'",
     "coverage": "nyc -r lcov npm run test",
