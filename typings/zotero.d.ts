@@ -1,3 +1,10 @@
+// Augment Document interface for Zotero's XUL methods
+declare global {
+  interface Document {
+    createXULElement(tagName: string): Element
+  }
+}
+
 interface IZoteroPane {
   canEdit: () => boolean
   displayCannotEditLibraryMessage: () => void
@@ -18,7 +25,6 @@ interface ZoteroItem {
   libraryID: string
   getField: (field: string, unformatted?: boolean, includeBaseMapped?: boolean) => string
   isRegularItem: () => boolean
-  isCollection: () => boolean
 }
 
 interface ProgressWindow {
@@ -34,14 +40,19 @@ interface IZotero {
   debug: (msg: string) => void
   logError: (err: Error | string) => void
   launchURL: (url: string) => void
+  getMainWindow: () => (Window & { document: Document; alert: (msg: string) => void }) | null
+  getActiveZoteroPane: () => IZoteroPane | null
+  initialized: boolean
+  setTimeout: (fn: () => void, ms: number) => number
+  clearTimeout: (id: number) => void
 
   Notifier: {
-    registerObserver: (observer: ZoteroObserver, types: string[], id: string, priority?: number) => number // any => ZoteroObserver
+    registerObserver: (observer: ZoteroObserver, types: string[], id: string, priority?: number) => number
     unregisterObserver: (id: number) => void
   }
 
   Prefs: {
-    get: (pref: string) => string | number | boolean
+    get: (pref: string) => string | number | boolean | undefined
     set: (pref: string, value: string | number | boolean) => any
   }
 
@@ -68,6 +79,15 @@ interface IZotero {
 
   ProgressWindow: {
     new(): ProgressWindow
+  }
+
+  PreferencePanes: {
+    register: (options: {
+      pluginID: string
+      src: string
+      label: string
+      image?: string
+    }) => Promise<void>
   }
 }
 

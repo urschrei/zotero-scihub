@@ -6,10 +6,15 @@ const progressWindowSpy = spy()
 
 const Zotero: IZotero = new class {
   public Scihub
+  public initialized = true
 
   public debug(_msg: string) { return }
   public logError(_err: Error | string) { return }
   public launchURL(_url: string) { return }
+  public getMainWindow() { return null }
+  public getActiveZoteroPane() { return null }
+  public setTimeout(fn: () => void, _ms: number) { fn(); return 1 }
+  public clearTimeout(_id: number) { return }
 
   public Notifier: IZotero['Notifier'] = new class {
     public registerObserver(_observer: ZoteroObserver, _types: string[], _id: string, _priority?: number) {
@@ -32,7 +37,7 @@ const Zotero: IZotero = new class {
   }
 
   Items = new class {
-    public async getAsync(ids: number | number[]): Promise<any | any[]> {
+    public async getAsync(ids: number | number[]): Promise<any> {
       if (Array.isArray(ids)) {
         return Promise.resolve([regularItem1, regularItem2])
       } else {
@@ -78,6 +83,17 @@ const Zotero: IZotero = new class {
     public addDescription(_body: string) { return }
     public startCloseTimer(_millis: number) { return }
     public show() { return }
+  }
+
+  public PreferencePanes = new class {
+    public async register(_options: {
+      pluginID: string
+      src: string
+      label: string
+      image?: string
+    }): Promise<void> {
+      return Promise.resolve()
+    }
   }
 }
 

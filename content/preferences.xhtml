@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Sci-Hub Preferences</title>
+  <style>
+    .preference-row {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+    }
+    .preference-row label {
+      min-width: 180px;
+      margin-right: 10px;
+    }
+    .preference-row input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+    .preference-row input[type="checkbox"] {
+      margin-right: 10px;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <div class="preference-row">
+      <input type="checkbox" id="pref-automatic-pdf-download" />
+      <label for="pref-automatic-pdf-download">Automatic PDF Download</label>
+    </div>
+    <div class="preference-row">
+      <label for="pref-scihub-url">Sci-Hub URL:</label>
+      <input type="text" id="pref-scihub-url" />
+    </div>
+  </div>
+  <script>
+    // Initialize preference values when pane loads
+    (function() {
+      const automaticCheckbox = document.getElementById('pref-automatic-pdf-download');
+      const urlInput = document.getElementById('pref-scihub-url');
+
+      // Load current values
+      automaticCheckbox.checked = Zotero.Prefs.get('zoteroscihub.automatic_pdf_download') ?? true;
+      urlInput.value = Zotero.Prefs.get('zoteroscihub.scihub_url') ?? 'https://sci-hub.ru/';
+
+      // Save on change
+      automaticCheckbox.addEventListener('change', function() {
+        Zotero.Prefs.set('zoteroscihub.automatic_pdf_download', this.checked);
+      });
+
+      urlInput.addEventListener('change', function() {
+        Zotero.Prefs.set('zoteroscihub.scihub_url', this.value);
+      });
+    })();
+  </script>
+</body>
+</html>

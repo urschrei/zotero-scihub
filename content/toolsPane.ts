@@ -4,12 +4,10 @@ declare const Zotero: IZotero
 
 class ToolsPane {
   public async updateAll(): Promise<void> {
-    Zotero.debug('scihub: updating all items')
-
     const allItems = await Zotero.Items.getAll()
     const items = allItems.filter(item => {
       const libraryId = item.getField('libraryID')
-      const isProcessable = item.isRegularItem() && !item.isCollection()
+      const isProcessable = item.isRegularItem()
       const isEditable: boolean = libraryId === null || libraryId === '' || Zotero.Libraries.isEditable(libraryId)
 
       return isProcessable && isEditable
