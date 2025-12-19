@@ -16,4 +16,3 @@ node_modules
 .vscode
 .eslintcache
 coverage
-.nyc_output

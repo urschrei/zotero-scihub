@@ -1,12 +1,12 @@
 // Test setup - register mocks before tests run
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/unbound-method */
-import Module from 'module'
+import { vi } from 'vitest'
+import { JSDOM } from 'jsdom'
 
-// Store original require
-const originalRequire = Module.prototype.require
+// Set up DOMParser before any other imports
+globalThis.DOMParser = new JSDOM().window.DOMParser
 
 // Mock zotero-plugin-toolkit
-const mockMenuManager = {
+vi.mock('zotero-plugin-toolkit', () => ({
   MenuManager: class {
     register(_menu: string, _options: Record<string, unknown>): void {
       // Mock implementation
@@ -16,13 +16,11 @@ const mockMenuManager = {
       // Mock implementation
     }
   },
-}
+}))
 
-// Override require to intercept zotero-plugin-toolkit
-Module.prototype.require = function(id: string) {
-  if (id === 'zotero-plugin-toolkit') {
-    return mockMenuManager
-  }
-  // eslint-disable-next-line prefer-rest-params
-  return originalRequire.apply(this, arguments as unknown as [string])
-}
+// Import and set up Zotero mock
+import { Zotero } from './zotero.mock'
+globalThis.Zotero = Zotero
+
+// Since there is catch-all in the code which raises alerts
+globalThis.alert = (m: string) => { throw new Error(m) }
