@@ -1,7 +1,6 @@
 import type { ZoteroItem, IZotero, ZoteroObserver } from '../typings/zotero'
 import { ItemPane } from './itemPane'
 import { ToolsPane } from './toolsPane'
-import { PrefPane } from './prefPane'
 import { UrlUtil } from './urlUtil'
 import { ZoteroUtil } from './zoteroUtil'
 import { MenuManager } from 'zotero-plugin-toolkit'
@@ -45,12 +44,10 @@ class Scihub {
   private initialized = false
   private menuIds: string[] = []
   public ItemPane: ItemPane
-  public PrefPane: PrefPane
   public ToolsPane: ToolsPane
 
   constructor() {
     this.ItemPane = new ItemPane()
-    this.PrefPane = new PrefPane()
     this.ToolsPane = new ToolsPane()
   }
 
