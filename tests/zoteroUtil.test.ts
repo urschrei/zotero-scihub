@@ -20,11 +20,12 @@ describe('ZoteroUtil test', () => {
 
     it('should pass correct parameters to built-in Zotero method', async () => {
       const pdfUrl = new URL('https://example.com/filename.pdf')
+      const doi = '10.1234/test.article'
 
-      await ZoteroUtil.attachRemotePDFToItem(pdfUrl, regularItem1)
+      await ZoteroUtil.attachRemotePDFToItem(pdfUrl, regularItem1, doi)
 
       expect(attachmentSpy.firstCall.args[0].url).to.equal('https://example.com/filename.pdf')
-      expect(attachmentSpy.firstCall.args[0].fileBaseName).to.equal('filename.pdf')
+      expect(attachmentSpy.firstCall.args[0].fileBaseName).to.equal('10.1234_test.article')
       expect(attachmentSpy.firstCall.args[0].title).to.equal('regularItemTitle1')
     })
   })
