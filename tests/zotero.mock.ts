@@ -1,8 +1,11 @@
+import { vi } from 'vitest'
 import { IZotero, ZoteroItem, ZoteroObserver, ProgressWindow } from '../typings/zotero'
 import { regularItem1, regularItem2 } from './zoteroItem.mock'
-import { spy } from 'sinon'
 
-const progressWindowSpy = spy()
+const progressWindowSpy = vi.fn()
+
+// Create mockable HTTP request function
+const httpRequestMock = vi.fn()
 
 const Zotero: IZotero = new class {
   public Scihub
@@ -50,20 +53,8 @@ const Zotero: IZotero = new class {
     }
   }
 
-  public HTTP = new class {
-    public async request(method: string, url: string, options?: {
-      body?: string
-      responseType?: XMLHttpRequestResponseType
-      headers?: Record<string, string>
-    }): Promise<XMLHttpRequest> {
-      const xhr = new XMLHttpRequest()
-      xhr.open(method, url, false)
-      if (options?.responseType) {
-        xhr.responseType = options.responseType
-      }
-      xhr.send()
-      return Promise.resolve(xhr)
-    }
+  public HTTP = {
+    request: httpRequestMock,
   }
 
   public Attachments = new class {
@@ -97,4 +88,4 @@ const Zotero: IZotero = new class {
   }
 }
 
-export { Zotero, progressWindowSpy }
+export { Zotero, progressWindowSpy, httpRequestMock }
