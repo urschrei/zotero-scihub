@@ -1,11 +1,12 @@
-import { UrlUtil } from './urlUtil'
 import type { ZoteroItem, IZotero } from '../typings/zotero'
 
 declare const Zotero: IZotero
 
 export abstract class ZoteroUtil {
-  public static async attachRemotePDFToItem(pdfUrl: URL, item: ZoteroItem): Promise<void> {
-    const filename = UrlUtil.extractFileNameFromUrl(pdfUrl)
+  public static async attachRemotePDFToItem(pdfUrl: URL, item: ZoteroItem, doi: string): Promise<void> {
+    // Use DOI as filename (replace / with _ for filesystem compatibility)
+    // Note: fileBaseName should NOT include extension - Zotero adds it automatically
+    const filename = doi.replace(/\//g, '_')
 
     // Download PDF and add as attachment
     const importOptions = {
@@ -22,14 +23,14 @@ export abstract class ZoteroUtil {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-  public static showPopup(title: string, body: string, isError = false, timeout = 5): void {
+  public static showPopup(title: string, body: string, isError = false, timeout = 5, providerName = 'Sci-Hub'): void {
     // Shows user-friendly Zotero popup
     const seconds = 1000
     const pw = new Zotero.ProgressWindow()
     if (isError) {
-      pw.changeHeadline('Error', 'chrome://zotero/skin/cross.png', `Sci-Hub: ${title}`)
+      pw.changeHeadline('Error', 'chrome://zotero/skin/cross.png', `${providerName}: ${title}`)
     } else {
-      pw.changeHeadline(`Sci-Hub: ${title}`)
+      pw.changeHeadline(`${providerName}: ${title}`)
     }
     pw.addDescription(body)
     pw.show()

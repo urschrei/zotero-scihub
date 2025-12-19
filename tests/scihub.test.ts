@@ -14,7 +14,9 @@ globalThis.Zotero = Zotero
 globalThis.alert = (m: string) => { throw new Error(m) }
 
 import { Scihub } from '../content/scihub'
+import { providerManager } from '../content/providers'
 Zotero.Scihub = new Scihub()
+providerManager.initialize()
 
 describe('Scihub test', () => {
   describe('updateItems', () => {
@@ -79,15 +81,15 @@ describe('Scihub test', () => {
       expect(attachmentSpy.callCount).to.equals(3)
 
       expect(attachmentSpy.firstCall.args[0].url).to.equal('https://example.com/regular_item_1.pdf')
-      expect(attachmentSpy.firstCall.args[0].fileBaseName).to.equal('regular_item_1.pdf')
+      expect(attachmentSpy.firstCall.args[0].fileBaseName).to.equal('10.1037_a0023781')
       expect(attachmentSpy.firstCall.args[0].title).to.equal('regularItemTitle1')
 
       expect(attachmentSpy.secondCall.args[0].url).to.equal('https://example.com/doi_in_extra_item.pdf?param=val#tag')
-      expect(attachmentSpy.secondCall.args[0].fileBaseName).to.equal('doi_in_extra_item.pdf')
+      expect(attachmentSpy.secondCall.args[0].fileBaseName).to.equal('10.1029_2018JA025877')
       expect(attachmentSpy.secondCall.args[0].title).to.equal('DOIinExtraItemTitle')
 
       expect(attachmentSpy.thirdCall.args[0].url).to.equal('https://example.com/doi_in_url_item.pdf')
-      expect(attachmentSpy.thirdCall.args[0].fileBaseName).to.equal('doi_in_url_item.pdf')
+      expect(attachmentSpy.thirdCall.args[0].fileBaseName).to.equal('10.1080_00224490902775827')
       expect(attachmentSpy.thirdCall.args[0].title).to.equal('DOIinUrlItemTitle')
     })
 

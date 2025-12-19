@@ -4,6 +4,8 @@ import { ToolsPane } from './toolsPane'
 import { UrlUtil } from './urlUtil'
 import { ZoteroUtil } from './zoteroUtil'
 import { MenuManager } from 'zotero-plugin-toolkit'
+import { providerManager, pdfExtractor } from './providers'
+import type { Provider } from './providers'
 
 declare const Zotero: IZotero
 declare const window: Window | undefined
@@ -38,7 +40,6 @@ class ItemObserver implements ZoteroObserver {
 
 class Scihub {
   // TODO: only bulk-update items which are missing paper attachment
-  private static readonly DEFAULT_SCIHUB_URL = 'https://sci-hub.ru/'
   private static readonly DEFAULT_AUTOMATIC_PDF_DOWNLOAD = true
   private observerId: number | null = null
   private initialized = false
@@ -54,6 +55,7 @@ class Scihub {
   // Called by bootstrap.ts on plugin startup
   public startup(reason: string): void {
     Zotero.debug(`Scihub: startup (${reason})`)
+    providerManager.initialize()
     this.registerObserver()
   }
 
@@ -95,12 +97,15 @@ class Scihub {
   // Register context menu items using MenuManager
   private registerMenus(_win: Window): void {
     try {
+      // Icon path using rootURI (chrome:// URLs don't work in Zotero 7/8 bootstrap plugins)
+      const iconPath = typeof rootURI !== 'undefined' ? `${rootURI}skin/default/sci-hub-logo.svg` : ''
+
       // Register item context menu item
       Menu.register('item', {
         tag: 'menuitem',
         id: 'zotero-itemmenu-scihub',
         label: 'Update Sci-Hub PDF',
-        icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+        icon: iconPath,
         commandListener: () => { void this.ItemPane.updateSelectedItems() },
       })
       this.menuIds.push('zotero-itemmenu-scihub')
@@ -110,7 +115,7 @@ class Scihub {
         tag: 'menuitem',
         id: 'zotero-collectionmenu-scihub',
         label: 'Update Collection Sci-Hub PDFs',
-        icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+        icon: iconPath,
         commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
       })
       this.menuIds.push('zotero-collectionmenu-scihub')
@@ -120,7 +125,7 @@ class Scihub {
         tag: 'menuitem',
         id: 'zotero-scihub-tools-updateall',
         label: 'Update All Sci-Hub PDFs',
-        icon: 'chrome://zotero-scihub/skin/sci-hub-logo.svg',
+        icon: iconPath,
         commandListener: () => { void this.ToolsPane.updateAll() },
       })
       this.menuIds.push('zotero-scihub-tools-updateall')
@@ -135,12 +140,21 @@ class Scihub {
     this.menuIds = []
   }
 
-  public getBaseScihubUrl(): string {
-    if (Zotero.Prefs.get('zoteroscihub.scihub_url') === undefined) {
-      Zotero.Prefs.set('zoteroscihub.scihub_url', Scihub.DEFAULT_SCIHUB_URL)
-    }
+  /**
+   * Get the active provider
+   */
+  public getActiveProvider(): Provider {
+    return providerManager.getActiveProvider()
+  }
 
-    return Zotero.Prefs.get('zoteroscihub.scihub_url') as string
+  /**
+   * Get the base URL for the active provider (legacy compatibility)
+   * @deprecated Use getActiveProvider() instead
+   */
+  public getBaseScihubUrl(): string {
+    const provider = providerManager.getActiveProvider()
+    // Extract base URL from template (remove {DOI} placeholder)
+    return `${provider.urlTemplate.replace('{DOI}', '').replace(/\/$/, '')}/`
   }
 
   public isAutomaticPdfDownload(): boolean {
@@ -162,128 +176,80 @@ class Scihub {
 
   public async updateItems(items: ZoteroItem[]): Promise<void> {
     // WARN: Sequentially go through items, parallel will fail due to rate-limiting
-    // Cycle needs to be broken if scihub asks for Captcha,
+    // Cycle needs to be broken if provider asks for Captcha,
     // then user have to be redirected to the page to fill it in
+    const provider = providerManager.getActiveProvider()
+
     for (const item of items) {
       // Skip items which are not processable (attachments, notes, etc.)
       if (!item.isRegularItem()) {
         continue
       }
 
-      // Skip items without DOI or if URL generation had failed
-      const scihubUrl = this.generateScihubItemUrl(item)
-      if (!scihubUrl) {
-        ZoteroUtil.showPopup('DOI is missing', item.getField('title'), true)
+      // Skip items without DOI
+      const doi = this.getDoi(item)
+      if (!doi) {
+        // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+        ZoteroUtil.showPopup('DOI is missing', item.getField('title'), true, 5, provider.name)
         Zotero.debug(`scihub: failed to generate URL for "${item.getField('title')}"`)
         continue
       }
 
+      const providerUrl = new URL(provider.urlTemplate.replace('{DOI}', doi))
+
       try {
-        await this.updateItem(scihubUrl, item)
+        await this.updateItem(providerUrl, item, provider, doi)
       } catch (error) {
         if (error instanceof PdfNotFoundError) {
           // Do not stop traversing items if PDF is missing for one of them
-          ZoteroUtil.showPopup('PDF not available', `Try again later.\n"${item.getField('title')}"`, true)
+          // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+          ZoteroUtil.showPopup('PDF not available', `Try again later.\n"${item.getField('title')}"`, true, 5, provider.name)
           continue
         } else {
           // Break if Captcha is reached, alert user and redirect
           const alertFn = Zotero.getMainWindow()?.alert || alert
           alertFn(
             `Captcha is required or PDF is not ready yet for "${item.getField('title')}".\n\
-            You will be redirected to the scihub page.\n\
+            You will be redirected to the provider page.\n\
             Restart fetching process manually.\n\
             Error message: ${error}`)
-          Zotero.launchURL(scihubUrl.href)
+          Zotero.launchURL(providerUrl.href)
           break
         }
       }
     }
   }
 
-  private async updateItem(scihubUrl: URL, item: ZoteroItem) {
-    ZoteroUtil.showPopup('Fetching PDF', item.getField('title'))
+  private async updateItem(providerUrl: URL, item: ZoteroItem, provider: Provider, doi: string) {
+    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+    ZoteroUtil.showPopup('Fetching PDF', item.getField('title'), false, 5, provider.name)
 
     const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) ' +
       'AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'
-    const xhr = await Zotero.HTTP.request('GET', scihubUrl.href, {
+    const xhr = await Zotero.HTTP.request('GET', providerUrl.href, {
       responseType: 'document',
       headers: { 'User-Agent': userAgent },
     })
 
-    // Try multiple selectors - sci-hub uses different elements across domains
-    // Current sci-hub (2024+) uses <object type="application/pdf" data="...">
-    // Older versions used #pdf, embed, or iframe with src attribute
-    let rawPdfUrl: string | null | undefined = null
-
-    // Try object tag first (current sci-hub 2024+ structure)
-    const objectElement = xhr.responseXML?.querySelector('object[type="application/pdf"]')
-    if (objectElement) {
-      rawPdfUrl = objectElement.getAttribute('data')
-      // Remove URL fragment (e.g., #navpanes=0&view=FitH)
-      if (rawPdfUrl?.includes('#')) {
-        rawPdfUrl = rawPdfUrl.split('#')[0]
-      }
-    }
-
-    // Try download link
-    if (!rawPdfUrl) {
-      const downloadLink = xhr.responseXML?.querySelector('.download a[href*=".pdf"]') ||
-                           xhr.responseXML?.querySelector('a[href*="/download/"]')
-      if (downloadLink) {
-        rawPdfUrl = downloadLink.getAttribute('href')
-      }
-    }
-
-    // Try legacy selectors (older sci-hub versions)
-    if (!rawPdfUrl) {
-      const pdfElement = xhr.responseXML?.querySelector('#pdf') ||
-                         xhr.responseXML?.querySelector('embed[src*=".pdf"]') ||
-                         xhr.responseXML?.querySelector('iframe[src*=".pdf"]') ||
-                         xhr.responseXML?.querySelector('embed') ||
-                         xhr.responseXML?.querySelector('iframe')
-      rawPdfUrl = pdfElement?.getAttribute('src')
-    }
-
-    // Fallback: regex search in HTML
-    if (!rawPdfUrl) {
-      const bodyHtml = xhr.responseXML?.body?.innerHTML ?? ''
-      const pdfUrlMatch = bodyHtml.match(/data\s*=\s*['"]([^'"]*\.pdf[^'"]*)['"]/i) ||
-                          bodyHtml.match(/href\s*=\s*['"]([^'"]*\/download\/[^'"]*\.pdf)['"]/i) ||
-                          bodyHtml.match(/(?:src|href)\s*=\s*['"]([^'"]*\.pdf[^'"]*)['"]/i)
-      if (pdfUrlMatch) {
-        rawPdfUrl = pdfUrlMatch[1]
-      }
-    }
-
-    let pdfUrl = rawPdfUrl
-    if (rawPdfUrl !== undefined && (!rawPdfUrl?.startsWith('http') && !rawPdfUrl?.startsWith('//'))) {
-      pdfUrl = `${this.getBaseScihubUrl()}${rawPdfUrl}`
-    }
-    const body = xhr.responseXML?.querySelector('body')
+    const doc = xhr.responseXML
     const statusCode: number = xhr.status
 
-    if (statusCode === (HttpCodes.DONE as number) && pdfUrl) {
-      const httpsUrl = UrlUtil.urlToHttps(pdfUrl)
-      await ZoteroUtil.attachRemotePDFToItem(httpsUrl, item)
-    } else if (statusCode === (HttpCodes.DONE as number) && this.isPdfNotAvailable(body)) {
-      Zotero.debug(`scihub: PDF is not available at the moment "${scihubUrl}"`)
-      throw new PdfNotFoundError(`Pdf is not available: ${scihubUrl}`)
+    // Extract PDF URL using provider-specific logic
+    const rawPdfUrl = pdfExtractor.extractPdfUrl(doc, provider)
+
+    if (statusCode === (HttpCodes.DONE as number) && rawPdfUrl) {
+      // Normalise URL to absolute HTTPS
+      const baseUrl = `${provider.urlTemplate.replace('{DOI}', '').replace(/\/$/, '')}/`
+      const normalisedUrl = pdfExtractor.normalisePdfUrl(rawPdfUrl, baseUrl)
+      const httpsUrl = UrlUtil.urlToHttps(normalisedUrl)
+      await ZoteroUtil.attachRemotePDFToItem(httpsUrl, item, doi)
+    } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfNotAvailable(doc, provider)) {
+      Zotero.debug(`scihub: PDF is not available at the moment "${providerUrl}"`)
+      throw new PdfNotFoundError(`Pdf is not available: ${providerUrl}`)
     } else {
-      Zotero.debug(`scihub: failed to fetch PDF from "${scihubUrl}"`)
+      Zotero.debug(`scihub: failed to fetch PDF from "${providerUrl}"`)
       throw new Error(`PDF not found in page (status: ${statusCode})`)
     }
-  }
-
-  private isPdfNotAvailable(body: HTMLBodyElement | null | undefined): boolean {
-    const innerHTML = body?.innerHTML
-    // older .tf domain return rich error message
-    // newer .st domains return empty page if pdf is not available
-    if (!innerHTML || innerHTML?.trim() === '' ||
-      innerHTML?.match(/Please try to search again using DOI/im) ||
-      innerHTML?.match(/статья не найдена в базе/im)) {
-      return true
-    }
-    return false
   }
 
   private getDoi(item: ZoteroItem): string | null {
@@ -320,13 +286,227 @@ class Scihub {
     return null
   }
 
-  private generateScihubItemUrl(item: ZoteroItem): URL | null {
-    const doi = this.getDoi(item)
-    if (doi) {
-      const baseUrl = this.getBaseScihubUrl()
-      return new URL(doi, baseUrl)
+  // Preferences pane methods - called from preferences.xhtml
+  private static readonly XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul'
+  private static readonly PREF_AUTOMATIC = 'zoteroscihub.automatic_pdf_download'
+  private static readonly PREF_ACTIVE_PROVIDER = 'zoteroscihub.active_provider'
+  private static readonly PREF_LEGACY_SCIHUB_URL = 'zoteroscihub.scihub_url'
+
+  public onPrefsLoad(doc: Document): void {
+    Zotero.debug('Scihub: onPrefsLoad called')
+
+    const automaticCheckbox = doc.getElementById('pref-automatic-pdf-download') as HTMLInputElement | null
+    const providerSelect = doc.getElementById('pref-provider-select') as HTMLSelectElement | null
+    const scihubUrlInput = doc.getElementById('pref-scihub-url') as HTMLInputElement | null
+
+    if (!automaticCheckbox || !providerSelect || !scihubUrlInput) {
+      Zotero.debug('Scihub: preferences DOM elements not found')
+      return
     }
-    return null
+
+    // Set initial values
+    automaticCheckbox.checked = Zotero.Prefs.get(Scihub.PREF_AUTOMATIC) !== false
+    scihubUrlInput.value = this.loadScihubUrl()
+
+    // Populate provider dropdown
+    this.populateProviderDropdown(doc)
+    this.renderCustomProvidersList(doc)
+
+    // Event listeners
+    automaticCheckbox.addEventListener('command', () => {
+      const cb = doc.getElementById('pref-automatic-pdf-download') as HTMLInputElement
+      Zotero.Prefs.set(Scihub.PREF_AUTOMATIC, cb.checked)
+    })
+
+    providerSelect.addEventListener('command', () => {
+      const select = doc.getElementById('pref-provider-select') as HTMLSelectElement
+      Zotero.Prefs.set(Scihub.PREF_ACTIVE_PROVIDER, select.value)
+      this.updateScihubUrlVisibility(doc)
+    })
+
+    scihubUrlInput.addEventListener('change', function() {
+      let url = (this).value.trim()
+      if (url && !url.endsWith('/')) {
+        url += '/'
+      }
+      Zotero.Prefs.set(Scihub.PREF_LEGACY_SCIHUB_URL, url)
+    })
+
+    Zotero.debug('Scihub: preferences initialization complete')
+  }
+
+  public onPrefsShowAddForm(doc: Document): void {
+    const form = doc.getElementById('add-provider-form')
+    const btnContainer = doc.getElementById('add-provider-btn-container')
+    const nameInput = doc.getElementById('new-provider-name') as HTMLInputElement
+    const urlInput = doc.getElementById('new-provider-url') as HTMLInputElement
+    const linkTextInput = doc.getElementById('new-provider-linktext') as HTMLInputElement
+
+    if (form && btnContainer && nameInput && urlInput && linkTextInput) {
+      nameInput.value = ''
+      urlInput.value = ''
+      linkTextInput.value = 'Download'
+      form.style.display = ''
+      btnContainer.style.display = 'none'
+    }
+  }
+
+  public onPrefsHideAddForm(doc: Document): void {
+    const form = doc.getElementById('add-provider-form')
+    const btnContainer = doc.getElementById('add-provider-btn-container')
+
+    if (form && btnContainer) {
+      form.style.display = 'none'
+      btnContainer.style.display = ''
+    }
+  }
+
+  public onPrefsSaveProvider(doc: Document): void {
+    const nameInput = doc.getElementById('new-provider-name') as HTMLInputElement
+    const urlInput = doc.getElementById('new-provider-url') as HTMLInputElement
+    const linkTextInput = doc.getElementById('new-provider-linktext') as HTMLInputElement
+
+    if (!nameInput || !urlInput || !linkTextInput) return
+
+    const name = nameInput.value.trim()
+    const urlTemplate = urlInput.value.trim()
+    const linkText = linkTextInput.value.trim()
+
+    // Validation
+    const alertFn = Zotero.getMainWindow()?.alert || alert
+    if (!name) {
+      alertFn('Please enter a provider name.')
+      return
+    }
+    if (!urlTemplate) {
+      alertFn('Please enter a URL template.')
+      return
+    }
+    if (!urlTemplate.includes('{DOI}')) {
+      alertFn('URL template must contain {DOI} placeholder.')
+      return
+    }
+    if (!linkText) {
+      alertFn('Please enter the link text to match.')
+      return
+    }
+
+    // Use providerManager to add the provider (updates both in-memory and storage)
+    const newProvider = {
+      id: providerManager.generateCustomProviderId(),
+      name,
+      urlTemplate,
+      linkText,
+    }
+    providerManager.addCustomProvider(newProvider)
+
+    this.onPrefsHideAddForm(doc)
+    this.populateProviderDropdown(doc)
+    this.renderCustomProvidersList(doc)
+  }
+
+  private populateProviderDropdown(doc: Document): void {
+    const providerPopup = doc.getElementById('pref-provider-popup')
+    const providerSelect = doc.getElementById('pref-provider-select') as HTMLSelectElement | null
+
+    if (!providerPopup || !providerSelect) return
+
+    // Clear existing items
+    while (providerPopup.firstChild) {
+      providerPopup.removeChild(providerPopup.firstChild)
+    }
+
+    const providers = providerManager.getProviders()
+    const activeId = (Zotero.Prefs.get(Scihub.PREF_ACTIVE_PROVIDER) as string) || 'scihub'
+
+    for (const provider of providers) {
+      const menuitem = doc.createElementNS(Scihub.XUL_NS, 'menuitem')
+      menuitem.setAttribute('value', provider.id)
+      menuitem.setAttribute('label', provider.name)
+      providerPopup.appendChild(menuitem)
+    }
+
+    providerSelect.value = activeId
+    this.updateScihubUrlVisibility(doc)
+  }
+
+  private updateScihubUrlVisibility(doc: Document): void {
+    const providerSelect = doc.getElementById('pref-provider-select') as HTMLSelectElement | null
+    const scihubUrlSection = doc.getElementById('scihub-url-section')
+
+    if (providerSelect && scihubUrlSection) {
+      scihubUrlSection.style.display = providerSelect.value === 'scihub' ? '' : 'none'
+    }
+  }
+
+  private renderCustomProvidersList(doc: Document): void {
+    const customProvidersList = doc.getElementById('custom-providers-list')
+    if (!customProvidersList) return
+
+    // Clear existing items
+    while (customProvidersList.firstChild) {
+      customProvidersList.removeChild(customProvidersList.firstChild)
+    }
+
+    // Get custom providers from providerManager (filter out built-ins)
+    const customProviders = providerManager.getProviders().filter(p => !p.isBuiltin)
+    if (customProviders.length === 0) {
+      const emptyMsg = doc.createElementNS('http://www.w3.org/1999/xhtml', 'p')
+      emptyMsg.style.cssText = 'color: #999; font-style: italic; margin: 0;'
+      emptyMsg.textContent = 'No custom providers configured.'
+      customProvidersList.appendChild(emptyMsg)
+      return
+    }
+
+    for (const provider of customProviders) {
+      const row = doc.createElementNS(Scihub.XUL_NS, 'hbox') as HTMLElement
+      row.setAttribute('align', 'center')
+      row.style.cssText = 'margin-bottom: 8px; padding: 8px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.8;'
+
+      const infoBox = doc.createElementNS(Scihub.XUL_NS, 'vbox')
+      infoBox.setAttribute('flex', '1')
+
+      const nameLabel = doc.createElementNS(Scihub.XUL_NS, 'label')
+      nameLabel.setAttribute('value', provider.name)
+      ;(nameLabel as HTMLElement).style.fontWeight = 'bold'
+      infoBox.appendChild(nameLabel)
+
+      const urlLabel = doc.createElementNS(Scihub.XUL_NS, 'label')
+      urlLabel.setAttribute('value', provider.urlTemplate)
+      ;(urlLabel as HTMLElement).style.cssText = 'font-size: 11px; opacity: 0.7;'
+      infoBox.appendChild(urlLabel)
+
+      row.appendChild(infoBox)
+
+      const deleteBtn = doc.createElementNS(Scihub.XUL_NS, 'button')
+      deleteBtn.setAttribute('label', 'Delete')
+      deleteBtn.setAttribute('data-provider-id', provider.id)
+      deleteBtn.addEventListener('click', e => {
+        const id = (e.target as HTMLElement).getAttribute('data-provider-id')
+        if (id) {
+          this.deleteCustomProvider(doc, id)
+        }
+      })
+      row.appendChild(deleteBtn)
+
+      customProvidersList.appendChild(row)
+    }
+  }
+
+  private deleteCustomProvider(doc: Document, id: string): void {
+    // Use providerManager to remove (handles both in-memory and storage, plus active provider reset)
+    providerManager.removeCustomProvider(id)
+
+    this.populateProviderDropdown(doc)
+    this.renderCustomProvidersList(doc)
+  }
+
+  private loadScihubUrl(): string {
+    const legacyUrl = Zotero.Prefs.get(Scihub.PREF_LEGACY_SCIHUB_URL) as string | undefined
+    if (legacyUrl && typeof legacyUrl === 'string') {
+      return legacyUrl.replace(/\/$/, '')
+    }
+    return 'https://sci-hub.ru'
   }
 }
 
