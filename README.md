@@ -46,6 +46,62 @@ _Preferences > Advanced > Config Editor_
 1. Run `npm install`
 2. Run `npm run build` to build the XPI
 
+## Localisation
+
+This plugin uses Mozilla's [Fluent](https://projectfluent.org/) localisation system. All user-facing strings are stored in `.ftl` files located in `locale/`.
+
+### File structure
+
+```
+locale/
+  en-US/
+    zotero-scihub.ftl    # English (US) strings
+```
+
+### Adding new strings
+
+1. Add the string to `locale/en-US/zotero-scihub.ftl` with a key prefixed by `zotero-scihub-`:
+
+   ```ftl
+   zotero-scihub-my-new-string = My new string value
+   ```
+
+2. Use the string in TypeScript via the `getString()` helper:
+
+   ```typescript
+   import { getString } from './locale'
+
+   const message = getString('my-new-string')
+   ```
+
+3. For strings with parameters:
+
+   ```ftl
+   zotero-scihub-greeting = Hello, { $name }!
+   ```
+
+   ```typescript
+   getString('greeting', { name: 'World' })
+   ```
+
+4. For XHTML elements, use `data-l10n-id`:
+
+   ```xml
+   <label data-l10n-id="zotero-scihub-my-new-string"/>
+   ```
+
+### Adding a new language
+
+1. Create a new directory under `locale/` (e.g., `locale/de-DE/`)
+2. Copy `zotero-scihub.ftl` from `en-US/` and translate the values
+3. Register the locale in `content/bootstrap.ts` by adding a line to `registerChrome()`:
+
+   ```typescript
+   ['locale', 'zotero-scihub', 'de-DE', 'locale/de-DE/'],
+   ```
+
+See the [Fluent Syntax Guide](https://projectfluent.org/fluent/guide/) for more details on the `.ftl` format.
+
 ## [Contributing](./CONTRIBUTING.md)
 
 ## Disclaimer

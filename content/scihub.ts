@@ -6,6 +6,7 @@ import { ZoteroUtil } from './zoteroUtil'
 import { MenuManager } from 'zotero-plugin-toolkit'
 import { providerManager, pdfExtractor } from './providers'
 import type { Provider } from './providers'
+import { getString, initLocale } from './locale'
 
 declare const Zotero: IZotero
 declare const window: Window | undefined
@@ -55,6 +56,7 @@ class Scihub {
   // Called by bootstrap.ts on plugin startup
   public startup(reason: string): void {
     Zotero.debug(`Scihub: startup (${reason})`)
+    initLocale()
     providerManager.initialize()
     this.registerObserver()
   }
@@ -104,7 +106,7 @@ class Scihub {
       Menu.register('item', {
         tag: 'menuitem',
         id: 'zotero-itemmenu-scihub',
-        label: 'Update Sci-Hub PDF',
+        label: getString('menu-item'),
         icon: iconPath,
         commandListener: () => { void this.ItemPane.updateSelectedItems() },
       })
@@ -114,7 +116,7 @@ class Scihub {
       Menu.register('collection', {
         tag: 'menuitem',
         id: 'zotero-collectionmenu-scihub',
-        label: 'Update Collection Sci-Hub PDFs',
+        label: getString('menu-collection'),
         icon: iconPath,
         commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
       })
@@ -124,7 +126,7 @@ class Scihub {
       Menu.register('menuTools', {
         tag: 'menuitem',
         id: 'zotero-scihub-tools-updateall',
-        label: 'Update All Sci-Hub PDFs',
+        label: getString('menu-all'),
         icon: iconPath,
         commandListener: () => { void this.ToolsPane.updateAll() },
       })
@@ -190,7 +192,7 @@ class Scihub {
       const doi = this.getDoi(item)
       if (!doi) {
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-        ZoteroUtil.showPopup('DOI is missing', item.getField('title'), true, 5, provider.name)
+        ZoteroUtil.showPopup(getString('popup-doi-missing'), item.getField('title'), true, 5, provider.name)
         Zotero.debug(`scihub: failed to generate URL for "${item.getField('title')}"`)
         continue
       }
@@ -203,16 +205,15 @@ class Scihub {
         if (error instanceof PdfNotFoundError) {
           // Do not stop traversing items if PDF is missing for one of them
           // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-          ZoteroUtil.showPopup('PDF not available', `Try again later.\n"${item.getField('title')}"`, true, 5, provider.name)
+          ZoteroUtil.showPopup(getString('popup-pdf-unavailable'), `${getString('popup-try-later')}\n"${item.getField('title')}"`, true, 5, provider.name)
           continue
         } else {
           // Break if Captcha is reached, alert user and redirect
           const alertFn = Zotero.getMainWindow()?.alert || alert
-          alertFn(
-            `Captcha is required or PDF is not ready yet for "${item.getField('title')}".\n\
-            You will be redirected to the provider page.\n\
-            Restart fetching process manually.\n\
-            Error message: ${error}`)
+          alertFn(getString('alert-captcha', {
+            title: item.getField('title'),
+            error: String(error),
+          }))
           Zotero.launchURL(providerUrl.href)
           break
         }
@@ -222,7 +223,7 @@ class Scihub {
 
   private async updateItem(providerUrl: URL, item: ZoteroItem, provider: Provider, doi: string) {
     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    ZoteroUtil.showPopup('Fetching PDF', item.getField('title'), false, 5, provider.name)
+    ZoteroUtil.showPopup(getString('popup-fetching'), item.getField('title'), false, 5, provider.name)
 
     const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) ' +
       'AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'
@@ -345,7 +346,7 @@ class Scihub {
     if (form && btnContainer && nameInput && urlInput && linkTextInput) {
       nameInput.value = ''
       urlInput.value = ''
-      linkTextInput.value = 'Download'
+      linkTextInput.value = getString('prefs-custom-linktext-default')
       form.style.display = ''
       btnContainer.style.display = 'none'
     }
@@ -375,19 +376,19 @@ class Scihub {
     // Validation
     const alertFn = Zotero.getMainWindow()?.alert || alert
     if (!name) {
-      alertFn('Please enter a provider name.')
+      alertFn(getString('validation-name-required'))
       return
     }
     if (!urlTemplate) {
-      alertFn('Please enter a URL template.')
+      alertFn(getString('validation-url-required'))
       return
     }
     if (!urlTemplate.includes('{DOI}')) {
-      alertFn('URL template must contain {DOI} placeholder.')
+      alertFn(getString('validation-url-doi'))
       return
     }
     if (!linkText) {
-      alertFn('Please enter the link text to match.')
+      alertFn(getString('validation-linktext-required'))
       return
     }
 
@@ -453,7 +454,7 @@ class Scihub {
     if (customProviders.length === 0) {
       const emptyMsg = doc.createElementNS('http://www.w3.org/1999/xhtml', 'p')
       emptyMsg.style.cssText = 'color: #999; font-style: italic; margin: 0;'
-      emptyMsg.textContent = 'No custom providers configured.'
+      emptyMsg.textContent = getString('prefs-custom-empty')
       customProvidersList.appendChild(emptyMsg)
       return
     }
@@ -479,7 +480,7 @@ class Scihub {
       row.appendChild(infoBox)
 
       const deleteBtn = doc.createElementNS(Scihub.XUL_NS, 'button')
-      deleteBtn.setAttribute('label', 'Delete')
+      deleteBtn.setAttribute('label', getString('prefs-btn-delete'))
       deleteBtn.setAttribute('data-provider-id', provider.id)
       deleteBtn.addEventListener('click', e => {
         const id = (e.target as HTMLElement).getAttribute('data-provider-id')
