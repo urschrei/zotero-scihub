@@ -30,7 +30,8 @@ class ItemPane {
 
       const items = zoteroPane.getSelectedItems()
       if (items && items.length > 0) {
-        await Zotero.Scihub.updateItems(items)
+        // Don't skip existing PDFs for explicitly selected items
+        await Zotero.Scihub.updateItems(items, false)
       }
     } catch (err) {
       Zotero.logError(err as Error)

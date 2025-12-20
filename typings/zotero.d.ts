@@ -25,6 +25,8 @@ interface ZoteroItem {
   libraryID: string
   getField: (field: string, unformatted?: boolean, includeBaseMapped?: boolean) => string
   isRegularItem: () => boolean
+  getAttachments: () => number[]
+  attachmentContentType?: string
 }
 
 interface ProgressWindow {
@@ -57,6 +59,7 @@ interface IZotero {
   }
 
   Items: {
+    get: (id: number) => ZoteroItem | null
     getAsync: (ids: number | number[]) => Promise<any | any[]>
     getAll: () => Promise<ZoteroItem[]>
   }
