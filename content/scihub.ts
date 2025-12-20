@@ -40,7 +40,6 @@ class ItemObserver implements ZoteroObserver {
 }
 
 class Scihub {
-  // TODO: only bulk-update items which are missing paper attachment
   private static readonly DEFAULT_AUTOMATIC_PDF_DOWNLOAD = true
   private observerId: number | null = null
   private initialized = false
@@ -176,7 +175,7 @@ class Scihub {
     this.unregisterObserver()
   }
 
-  public async updateItems(items: ZoteroItem[]): Promise<void> {
+  public async updateItems(items: ZoteroItem[], skipExistingPdfs = true): Promise<void> {
     // WARN: Sequentially go through items, parallel will fail due to rate-limiting
     // Cycle needs to be broken if provider asks for Captcha,
     // then user have to be redirected to the page to fill it in
@@ -185,6 +184,12 @@ class Scihub {
     for (const item of items) {
       // Skip items which are not processable (attachments, notes, etc.)
       if (!item.isRegularItem()) {
+        continue
+      }
+
+      // Skip items that already have a PDF attachment (only for bulk operations)
+      if (skipExistingPdfs && this.hasPdfAttachment(item)) {
+        Zotero.debug(`scihub: skipping "${item.getField('title')}" - already has PDF`)
         continue
       }
 
@@ -251,6 +256,17 @@ class Scihub {
       Zotero.debug(`scihub: failed to fetch PDF from "${providerUrl}"`)
       throw new Error(`PDF not found in page (status: ${statusCode})`)
     }
+  }
+
+  private hasPdfAttachment(item: ZoteroItem): boolean {
+    const attachmentIds = item.getAttachments()
+    for (const id of attachmentIds) {
+      const attachment = Zotero.Items.get(id)
+      if (attachment?.attachmentContentType === 'application/pdf') {
+        return true
+      }
+    }
+    return false
   }
 
   private getDoi(item: ZoteroItem): string | null {

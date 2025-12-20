@@ -40,6 +40,10 @@ const Zotero: IZotero = new class {
   }
 
   Items = new class {
+    public get(_id: number): ZoteroItem | null {
+      return null  // Return null to simulate no PDF attachments
+    }
+
     public async getAsync(ids: number | number[]): Promise<any> {
       if (Array.isArray(ids)) {
         return Promise.resolve([regularItem1, regularItem2])
