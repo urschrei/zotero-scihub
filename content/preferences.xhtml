@@ -1,16 +1,20 @@
 <vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
       xmlns:html="http://www.w3.org/1999/xhtml"
       onload="Zotero.Scihub.onPrefsLoad(document)">
+  <linkset>
+    <html:link rel="localization" href="zotero-scihub.ftl"/>
+  </linkset>
+
   <groupbox>
-    <label><html:h2>PDF Provider Settings</html:h2></label>
+    <label><html:h2 data-l10n-id="zotero-scihub-prefs-title"></html:h2></label>
 
     <hbox align="center" style="margin: 10px 0;">
       <checkbox id="pref-automatic-pdf-download"
-                label="Automatic PDF Download"/>
+                data-l10n-id="zotero-scihub-prefs-automatic"/>
     </hbox>
 
     <hbox align="center" style="margin: 10px 0;">
-      <label value="Provider:" style="margin-right: 10px; min-width: 80px;"/>
+      <label data-l10n-id="zotero-scihub-prefs-provider-label" style="margin-right: 10px; min-width: 80px;"/>
       <menulist id="pref-provider-select" style="flex: 1; min-width: 200px;">
         <menupopup id="pref-provider-popup"/>
       </menulist>
@@ -18,45 +22,41 @@
 
     <vbox id="scihub-url-section" style="margin: 10px 0;">
       <hbox align="center">
-        <label value="Sci-Hub URL:" style="margin-right: 10px; min-width: 80px;"/>
+        <label data-l10n-id="zotero-scihub-prefs-scihub-url-label" style="margin-right: 10px; min-width: 80px;"/>
         <html:input type="text" id="pref-scihub-url" style="flex: 1; min-width: 200px;"/>
       </hbox>
-      <html:p style="margin: 5px 0 0 90px; font-size: 11px; color: #666;">
-        Base URL for Sci-Hub (e.g. https://sci-hub.ru/)
-      </html:p>
+      <html:p data-l10n-id="zotero-scihub-prefs-scihub-url-help" style="margin: 5px 0 0 90px; font-size: 11px; color: #666;"/>
     </vbox>
   </groupbox>
 
   <groupbox>
-    <label><html:h2>Custom Providers</html:h2></label>
-    <html:p style="margin-bottom: 10px; color: #666; font-size: 12px;">
-      Add custom PDF providers. Use {DOI} as placeholder for the DOI in the URL template.
-    </html:p>
+    <label><html:h2 data-l10n-id="zotero-scihub-prefs-custom-title"></html:h2></label>
+    <html:p data-l10n-id="zotero-scihub-prefs-custom-help" style="margin-bottom: 10px; color: #666; font-size: 12px;"/>
 
     <vbox id="custom-providers-list" style="margin-bottom: 10px;">
     </vbox>
 
     <vbox id="add-provider-form" style="border: 1px solid #ccc; padding: 10px; border-radius: 4px; display: none;">
       <hbox align="center" style="margin-bottom: 8px;">
-        <label value="Name:" style="margin-right: 10px; min-width: 80px;"/>
+        <label data-l10n-id="zotero-scihub-prefs-custom-name" style="margin-right: 10px; min-width: 80px;"/>
         <html:input type="text" id="new-provider-name" placeholder="My Provider" style="flex: 1;"/>
       </hbox>
       <hbox align="center" style="margin-bottom: 8px;">
-        <label value="URL Template:" style="margin-right: 10px; min-width: 80px;"/>
+        <label data-l10n-id="zotero-scihub-prefs-custom-url" style="margin-right: 10px; min-width: 80px;"/>
         <html:input type="text" id="new-provider-url" placeholder="https://example.com/{DOI}" style="flex: 1;"/>
       </hbox>
       <hbox align="center" style="margin-bottom: 8px;">
-        <label value="Link Text:" style="margin-right: 10px; min-width: 80px;"/>
+        <label data-l10n-id="zotero-scihub-prefs-custom-linktext" style="margin-right: 10px; min-width: 80px;"/>
         <html:input type="text" id="new-provider-linktext" placeholder="Download" style="flex: 1;"/>
       </hbox>
       <hbox style="justify-content: flex-end; gap: 8px;">
-        <button id="btn-cancel-provider" label="Cancel" oncommand="Zotero.Scihub.onPrefsHideAddForm(document)"/>
-        <button id="btn-save-provider" label="Save" oncommand="Zotero.Scihub.onPrefsSaveProvider(document)"/>
+        <button id="btn-cancel-provider" data-l10n-id="zotero-scihub-prefs-btn-cancel" oncommand="Zotero.Scihub.onPrefsHideAddForm(document)"/>
+        <button id="btn-save-provider" data-l10n-id="zotero-scihub-prefs-btn-save" oncommand="Zotero.Scihub.onPrefsSaveProvider(document)"/>
       </hbox>
     </vbox>
 
     <hbox id="add-provider-btn-container">
-      <button id="btn-add-provider" label="+ Add Custom Provider" oncommand="Zotero.Scihub.onPrefsShowAddForm(document)"/>
+      <button id="btn-add-provider" data-l10n-id="zotero-scihub-prefs-btn-add" oncommand="Zotero.Scihub.onPrefsShowAddForm(document)"/>
     </hbox>
   </groupbox>
 </vbox>

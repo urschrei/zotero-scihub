@@ -45,6 +45,7 @@ function copyLocales() {
   }
 
   const localeFiles = fs.readdirSync(path.join(srcDir, 'en-US'))
+    .filter(f => f.endsWith('.ftl'))  // Only copy Fluent files
   for (const file of localeFiles) {
     fs.copyFileSync(
       path.join(srcDir, 'en-US', file),
