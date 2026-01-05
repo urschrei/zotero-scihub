@@ -1,6 +1,6 @@
 {
   "name": "pdferret",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Download papers and books by DOI from various providers",
   "license": "BlueOak-1.0.0",
   "scripts": {
@@ -29,7 +29,7 @@
   "xpi": {
     "name": "PDFerret for Zotero",
     "id": "pdferret@example.com",
-    "updateLink": "https://github.com/urschrei/pdferret/releases/download/v{version}/pdferret-{version}.xpi",
+    "updateLink": "https://github.com/urschrei/pdferret/releases/download/v{version}/pdferret.xpi",
     "releaseURL": "https://github.com/urschrei/pdferret/releases/download/release/",
     "iconURL": "chrome://pdferret/skin/pdferret-logo.svg",
     "minVersion": "7.0",
