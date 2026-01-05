@@ -125,4 +125,81 @@ const unavailableItem: ZoteroItem = new class {
   }
 }
 
-export { regularItem1, regularItem2, nonRegularItem, itemWithoutDOI, DOIinExtraItem, DOIinUrlItem, captchaItem, unavailableItem }
+// Item that triggers rate limit error
+const rateLimitedItem: ZoteroItem = new class {
+  public isRegularItem() { return true }
+  public getAttachments() { return [] }
+  public libraryID = 'rateLimitedItemLibraryID'
+  public id = '9'
+  public getField(f: string): any {
+    switch (f) {
+      case 'title': return 'rateLimitedItemTitle'
+      case 'DOI': return 'rate-limited'
+      case 'extra': return
+      case 'url': return
+    }
+  }
+}
+
+// Item that triggers connection error
+const connectionErrorItem: ZoteroItem = new class {
+  public isRegularItem() { return true }
+  public getAttachments() { return [] }
+  public libraryID = 'connectionErrorItemLibraryID'
+  public id = '10'
+  public getField(f: string): any {
+    switch (f) {
+      case 'title': return 'connectionErrorItemTitle'
+      case 'DOI': return 'connection-error'
+      case 'extra': return
+      case 'url': return
+    }
+  }
+}
+
+// Item that triggers timeout error
+const timeoutItem: ZoteroItem = new class {
+  public isRegularItem() { return true }
+  public getAttachments() { return [] }
+  public libraryID = 'timeoutItemLibraryID'
+  public id = '11'
+  public getField(f: string): any {
+    switch (f) {
+      case 'title': return 'timeoutItemTitle'
+      case 'DOI': return 'timeout'
+      case 'extra': return
+      case 'url': return
+    }
+  }
+}
+
+// Item that triggers PDF temporarily unavailable error
+const tempUnavailableItem: ZoteroItem = new class {
+  public isRegularItem() { return true }
+  public getAttachments() { return [] }
+  public libraryID = 'tempUnavailableItemLibraryID'
+  public id = '12'
+  public getField(f: string): any {
+    switch (f) {
+      case 'title': return 'tempUnavailableItemTitle'
+      case 'DOI': return 'temp-unavailable'
+      case 'extra': return
+      case 'url': return
+    }
+  }
+}
+
+export {
+  regularItem1,
+  regularItem2,
+  nonRegularItem,
+  itemWithoutDOI,
+  DOIinExtraItem,
+  DOIinUrlItem,
+  captchaItem,
+  unavailableItem,
+  rateLimitedItem,
+  connectionErrorItem,
+  timeoutItem,
+  tempUnavailableItem
+}

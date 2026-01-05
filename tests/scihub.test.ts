@@ -5,7 +5,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest'
 import { JSDOM } from 'jsdom'
 import { Zotero, progressWindowSpy, httpRequestMock } from './zotero.mock'
-import { nonRegularItem, itemWithoutDOI, regularItem1, regularItem2, DOIinExtraItem, DOIinUrlItem, captchaItem, unavailableItem } from './zoteroItem.mock'
+import {
+  nonRegularItem,
+  itemWithoutDOI,
+  regularItem1,
+  regularItem2,
+  DOIinExtraItem,
+  DOIinUrlItem,
+  captchaItem,
+  unavailableItem,
+  rateLimitedItem,
+  connectionErrorItem,
+  timeoutItem,
+  tempUnavailableItem
+} from './zoteroItem.mock'
 import { Scihub } from '../content/scihub'
 import { providerManager } from '../content/providers'
 
@@ -13,17 +26,40 @@ Zotero.Scihub = new Scihub()
 providerManager.initialize()
 
 // Mock HTTP responses based on URL
-const mockResponses: Record<string, string> = {
-  'https://sci-hub.ru/10.1037/a0023781':
-    '<html><body><iframe id="pdf" src="http://example.com/regular_item_1.pdf" /></body></html>',
-  'https://sci-hub.ru/10.1029/2018JA025877':
-    '<html><body><iframe id="pdf" src="https://example.com/doi_in_extra_item.pdf?param=val#tag" /></body></html>',
-  'https://sci-hub.ru/10.1080/00224490902775827':
-    '<html><body><embed id="pdf" src="http://example.com/doi_in_url_item.pdf"></embed></body></html>',
-  'https://sci-hub.ru/captcha':
-    '<html><body>Captcha is required</body></html>',
-  'https://sci-hub.ru/42.0/69':
-    '<html><body>Please try to search again using DOI</body></html>',
+// Format: { html: string, status: number } or 'network_error' or 'timeout'
+type MockResponse = { html: string; status: number } | 'network_error' | 'timeout'
+
+const mockResponses: Record<string, MockResponse> = {
+  'https://sci-hub.ru/10.1037/a0023781': {
+    html: '<html><body><iframe id="pdf" src="http://example.com/regular_item_1.pdf" /></body></html>',
+    status: 200,
+  },
+  'https://sci-hub.ru/10.1029/2018JA025877': {
+    html: '<html><body><iframe id="pdf" src="https://example.com/doi_in_extra_item.pdf?param=val#tag" /></body></html>',
+    status: 200,
+  },
+  'https://sci-hub.ru/10.1080/00224490902775827': {
+    html: '<html><body><embed id="pdf" src="http://example.com/doi_in_url_item.pdf"></embed></body></html>',
+    status: 200,
+  },
+  'https://sci-hub.ru/captcha': {
+    html: '<html><body>Please complete the g-recaptcha challenge</body></html>',
+    status: 200,
+  },
+  'https://sci-hub.ru/42.0/69': {
+    html: '<html><body>Please try to search again using DOI</body></html>',
+    status: 200,
+  },
+  'https://sci-hub.ru/rate-limited': {
+    html: '<html><body>Too many requests, slow down</body></html>',
+    status: 429,
+  },
+  'https://sci-hub.ru/connection-error': 'network_error',
+  'https://sci-hub.ru/timeout': 'timeout',
+  'https://sci-hub.ru/temp-unavailable': {
+    html: '<html><body>Server is busy, please try again later</body></html>',
+    status: 200,
+  },
 }
 
 describe('Scihub test', () => {
@@ -35,12 +71,25 @@ describe('Scihub test', () => {
 
       // Set up HTTP request mock to return appropriate responses with parsed document
       httpRequestMock.mockImplementation(async (_method: string, url: string) => {
-        const responseText = mockResponses[url] || '   '
-        const dom = new JSDOM(responseText, { contentType: 'text/html' })
+        const response = mockResponses[url]
+
+        // Handle network errors
+        if (response === 'network_error') {
+          throw new Error('Error: Error connecting to server. Check your Internet connection.')
+        }
+
+        // Handle timeout errors
+        if (response === 'timeout') {
+          throw new Error('Request timed out')
+        }
+
+        // Handle normal responses (with status code)
+        const { html, status } = response || { html: '   ', status: 200 }
+        const dom = new JSDOM(html, { contentType: 'text/html' })
         return {
-          responseText,
+          responseText: html,
           responseXML: dom.window.document,
-          status: 200,
+          status,
         } as unknown as XMLHttpRequest
       })
     })
@@ -112,6 +161,68 @@ describe('Scihub test', () => {
 
       launchURLSpy.mockRestore()
       alertSpy.mockRestore()
+    })
+
+    it('connection error shows popup and stops execution without redirect', async () => {
+      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
+
+      await Zotero.Scihub.updateItems([connectionErrorItem, regularItem1])
+
+      // Should show error popup (not alert)
+      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
+      // Should NOT redirect to provider
+      expect(launchURLSpy).not.toHaveBeenCalled()
+      // Should stop processing (regularItem1 not fetched)
+      expect(attachmentSpy).not.toHaveBeenCalled()
+
+      launchURLSpy.mockRestore()
+    })
+
+    it('timeout error shows popup and stops execution without redirect', async () => {
+      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
+
+      await Zotero.Scihub.updateItems([timeoutItem, regularItem1])
+
+      // Should show error popup (not alert)
+      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
+      // Should NOT redirect to provider
+      expect(launchURLSpy).not.toHaveBeenCalled()
+      // Should stop processing (regularItem1 not fetched)
+      expect(attachmentSpy).not.toHaveBeenCalled()
+
+      launchURLSpy.mockRestore()
+    })
+
+    it('rate limit error shows alert and redirects to provider', async () => {
+      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
+      const alertSpy = vi.spyOn(globalThis, 'alert').mockImplementation(() => {})
+
+      await Zotero.Scihub.updateItems([rateLimitedItem, regularItem1])
+
+      // Should redirect to provider (like captcha)
+      expect(launchURLSpy).toHaveBeenCalledTimes(1)
+      expect(alertSpy).toHaveBeenCalled()
+      // Should stop processing
+      expect(attachmentSpy).not.toHaveBeenCalled()
+
+      launchURLSpy.mockRestore()
+      alertSpy.mockRestore()
+    })
+
+    it('temporarily unavailable shows popup and continues to next item', async () => {
+      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
+
+      await Zotero.Scihub.updateItems([tempUnavailableItem, regularItem1])
+
+      // Should show error popup
+      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
+      // Should NOT redirect to provider
+      expect(launchURLSpy).not.toHaveBeenCalled()
+      // Should continue processing (regularItem1 fetched)
+      expect(attachmentSpy).toHaveBeenCalledTimes(1)
+      expect(attachmentSpy.mock.calls[0][0].url).toBe('https://example.com/regular_item_1.pdf')
+
+      launchURLSpy.mockRestore()
     })
   })
 })

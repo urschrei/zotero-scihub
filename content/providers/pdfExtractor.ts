@@ -59,6 +59,69 @@ export class PdfExtractor {
   }
 
   /**
+   * Check if the page indicates a captcha is required
+   */
+  public isCaptchaRequired(doc: Document | null): boolean {
+    if (!doc) return false
+
+    const body = doc.querySelector('body')
+    const innerHTML = body?.innerHTML ?? ''
+
+    // Common captcha patterns
+    if (innerHTML.match(/captcha/i) ||
+        innerHTML.match(/challenge-form/i) ||
+        innerHTML.match(/g-recaptcha/i) ||
+        innerHTML.match(/h-captcha/i) ||
+        innerHTML.match(/cf-turnstile/i)) {
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Check if the response indicates rate limiting
+   */
+  public isRateLimited(doc: Document | null, statusCode: number): boolean {
+    // HTTP 429 Too Many Requests
+    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+    if (statusCode === 429) return true
+
+    // HTTP 503 Service Unavailable (often used for rate limiting)
+    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+    if (statusCode === 503) {
+      const body = doc?.querySelector('body')?.innerHTML ?? ''
+      if (body.match(/too many requests/i) ||
+          body.match(/rate limit/i) ||
+          body.match(/slow down/i)) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * Check if PDF might become available later (temporary unavailability)
+   */
+  public isPdfTemporarilyUnavailable(doc: Document | null): boolean {
+    if (!doc) return false
+
+    const body = doc.querySelector('body')
+    const innerHTML = body?.innerHTML ?? ''
+
+    // Messages suggesting temporary unavailability
+    if (innerHTML.match(/try again later/i) ||
+        innerHTML.match(/temporarily unavailable/i) ||
+        innerHTML.match(/server is busy/i) ||
+        innerHTML.match(/please wait/i)) {
+      return true
+    }
+
+    return false
+  }
+
+  /**
    * Extract PDF URL from Sci-Hub using the existing multi-selector strategy
    */
   private extractScihubPdfUrl(doc: Document): string | null {
