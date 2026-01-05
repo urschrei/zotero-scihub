@@ -6,7 +6,7 @@ This is an add-on for [Zotero](https://www.zotero.org/) 8.x and [Juris-M](https:
 
 ### Install
 
-- Download the latest release (.xpi file) from the [Releases Page](https://github.com/ethanwillis/zotero-scihub/releases)
+- Download the latest release (.xpi file) from the [Releases Page](https://github.com/urschrei/pdferret/releases)
   _Note_ If you're using Firefox as your browser, right click the xpi and select "Save As.."
 - In Zotero click "Tools" in the top menu bar and then click "Plugins"
 - Click the gear icon on the top right
@@ -41,6 +41,27 @@ _Preferences > Advanced > Config Editor_
 1. You have [node.js](nodejs.org) installed. Builds are tested using the LTS version (as of late 2025)
 2. Run `npm install`
 3. Run `npm run build` to build the XPI
+
+## Publishing a Release
+
+1. Update the version number in **both** files (they must match):
+   - `package.json`
+   - `manifest.json`
+
+2. Commit and push to master
+
+3. Create and push a version tag:
+   ```bash
+   git tag v1.0.3
+   git push origin v1.0.3
+   ```
+
+4. The CI workflow will automatically:
+   - Build the XPI
+   - Create a GitHub release with the XPI attached
+   - Update `updates.json` for auto-updates
+
+Installed plugins will receive the update automatically via Zotero's built-in update mechanism.
 
 ## Localisation
 
