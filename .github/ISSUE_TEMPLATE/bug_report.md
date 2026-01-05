@@ -11,7 +11,7 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 **Version info**
-Which versions of Zotero, Zotero-Scihub, and Scihub mirror are you using.
+Which versions of Zotero, PDFerret, and which provider/mirror are you using.
 
 **To Reproduce**
 Steps to reproduce the behavior:

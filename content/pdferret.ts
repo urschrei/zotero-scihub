@@ -8,7 +8,7 @@ import { providerManager, pdfExtractor } from './providers'
 import type { Provider } from './providers'
 import { getString, initLocale } from './locale'
 import {
-  ScihubError,
+  PDFerretError,
   ConnectionError,
   TimeoutError,
   CaptchaRequiredError,
@@ -32,16 +32,16 @@ enum HttpCodes {
 class ItemObserver implements ZoteroObserver {
   // Called when a new item is added to the library
   public async notify(event: string, _type: string, ids: [number], _extraData: Record<string, any>) {
-    const automaticPdfDownload = Zotero.Scihub.isAutomaticPdfDownload()
+    const automaticPdfDownload = Zotero.PDFerret.isAutomaticPdfDownload()
 
     if (event === 'add' && automaticPdfDownload) {
       const items = await Zotero.Items.getAsync(ids) as ZoteroItem[]
-      await Zotero.Scihub.updateItems(items)
+      await Zotero.PDFerret.updateItems(items)
     }
   }
 }
 
-class Scihub {
+class PDFerret {
   private static readonly DEFAULT_AUTOMATIC_PDF_DOWNLOAD = true
   private observerId: number | null = null
   private initialized = false
@@ -56,7 +56,7 @@ class Scihub {
 
   // Called by bootstrap.ts on plugin startup
   public startup(reason: string): void {
-    Zotero.debug(`Scihub: startup (${reason})`)
+    Zotero.debug(`PDFerret: startup (${reason})`)
     initLocale()
     providerManager.initialize()
     this.registerObserver()
@@ -64,27 +64,27 @@ class Scihub {
 
   // Called by bootstrap.ts on plugin shutdown
   public shutdown(): void {
-    Zotero.debug('Scihub: shutdown')
+    Zotero.debug('PDFerret: shutdown')
     this.unregisterObserver()
     this.unregisterMenus()
   }
 
   // Called when main Zotero window loads
   public onMainWindowLoad(win: Window): void {
-    Zotero.debug('Scihub: main window loaded')
+    Zotero.debug('PDFerret: main window loaded')
     this.registerMenus(win)
   }
 
   // Called when main Zotero window unloads
   public onMainWindowUnload(_win: Window): void {
-    Zotero.debug('Scihub: main window unloading')
+    Zotero.debug('PDFerret: main window unloading')
     this.unregisterMenus()
   }
 
   // Register the item observer for automatic PDF downloads
   private registerObserver(): void {
     if (this.initialized) return
-    this.observerId = Zotero.Notifier.registerObserver(new ItemObserver(), ['item'], 'Scihub')
+    this.observerId = Zotero.Notifier.registerObserver(new ItemObserver(), ['item'], 'PDFerret')
     this.initialized = true
   }
 
@@ -101,37 +101,37 @@ class Scihub {
   private registerMenus(_win: Window): void {
     try {
       // Icon path using rootURI (chrome:// URLs don't work in Zotero 7/8 bootstrap plugins)
-      const iconPath = typeof rootURI !== 'undefined' ? `${rootURI}skin/default/sci-hub-logo.svg` : ''
+      const iconPath = typeof rootURI !== 'undefined' ? `${rootURI}skin/default/pdferret-logo.svg` : ''
 
       // Register item context menu item
       Menu.register('item', {
         tag: 'menuitem',
-        id: 'zotero-itemmenu-scihub',
+        id: 'pdferret-itemmenu',
         label: getString('menu-item'),
         icon: iconPath,
         commandListener: () => { void this.ItemPane.updateSelectedItems() },
       })
-      this.menuIds.push('zotero-itemmenu-scihub')
+      this.menuIds.push('pdferret-itemmenu')
 
       // Register collection context menu item
       Menu.register('collection', {
         tag: 'menuitem',
-        id: 'zotero-collectionmenu-scihub',
+        id: 'pdferret-collectionmenu',
         label: getString('menu-collection'),
         icon: iconPath,
         commandListener: () => { void this.ItemPane.updateSelectedEntity('') },
       })
-      this.menuIds.push('zotero-collectionmenu-scihub')
+      this.menuIds.push('pdferret-collectionmenu')
 
       // Register tools menu item
       Menu.register('menuTools', {
         tag: 'menuitem',
-        id: 'zotero-scihub-tools-updateall',
+        id: 'pdferret-tools-updateall',
         label: getString('menu-all'),
         icon: iconPath,
         commandListener: () => { void this.ToolsPane.updateAll() },
       })
-      this.menuIds.push('zotero-scihub-tools-updateall')
+      this.menuIds.push('pdferret-tools-updateall')
     } catch (err) {
       Zotero.logError(err as Error)
     }
@@ -161,11 +161,11 @@ class Scihub {
   }
 
   public isAutomaticPdfDownload(): boolean {
-    if (Zotero.Prefs.get('zoteroscihub.automatic_pdf_download') === undefined) {
-      Zotero.Prefs.set('zoteroscihub.automatic_pdf_download', Scihub.DEFAULT_AUTOMATIC_PDF_DOWNLOAD)
+    if (Zotero.Prefs.get('pdferret.automatic_pdf_download') === undefined) {
+      Zotero.Prefs.set('pdferret.automatic_pdf_download', PDFerret.DEFAULT_AUTOMATIC_PDF_DOWNLOAD)
     }
 
-    return Zotero.Prefs.get('zoteroscihub.automatic_pdf_download') as boolean
+    return Zotero.Prefs.get('pdferret.automatic_pdf_download') as boolean
   }
 
   // Legacy methods - kept for compatibility but no longer used
@@ -191,7 +191,7 @@ class Scihub {
 
       // Skip items that already have a PDF attachment (only for bulk operations)
       if (skipExistingPdfs && this.hasPdfAttachment(item)) {
-        Zotero.debug(`scihub: skipping "${item.getField('title')}" - already has PDF`)
+        Zotero.debug(`pdferret: skipping "${item.getField('title')}" - already has PDF`)
         continue
       }
 
@@ -200,7 +200,7 @@ class Scihub {
       if (!doi) {
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
         ZoteroUtil.showPopup(getString('popup-doi-missing'), item.getField('title'), true, 5, provider.name)
-        Zotero.debug(`scihub: failed to generate URL for "${item.getField('title')}"`)
+        Zotero.debug(`pdferret: failed to generate URL for "${item.getField('title')}"`)
         continue
       }
 
@@ -209,7 +209,7 @@ class Scihub {
       try {
         await this.updateItem(providerUrl, item, provider, doi)
       } catch (error) {
-        if (error instanceof ScihubError) {
+        if (error instanceof PDFerretError) {
           // Get localised error message
           const message = getString(error.getLocaleKey(), {
             title: item.getField('title'),
@@ -255,13 +255,13 @@ class Scihub {
 
     // Check for rate limiting first (before content analysis)
     if (pdfExtractor.isRateLimited(doc, statusCode)) {
-      Zotero.debug(`scihub: rate limited by "${providerUrl}"`)
+      Zotero.debug(`pdferret: rate limited by "${providerUrl}"`)
       throw new RateLimitedError(`Rate limited by provider: ${providerUrl}`)
     }
 
     // Check for captcha requirement
     if (pdfExtractor.isCaptchaRequired(doc)) {
-      Zotero.debug(`scihub: captcha required at "${providerUrl}"`)
+      Zotero.debug(`pdferret: captcha required at "${providerUrl}"`)
       throw new CaptchaRequiredError(`Captcha required: ${providerUrl}`)
     }
 
@@ -275,13 +275,13 @@ class Scihub {
       const httpsUrl = UrlUtil.urlToHttps(normalisedUrl)
       await ZoteroUtil.attachRemotePDFToItem(httpsUrl, item, doi)
     } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfTemporarilyUnavailable(doc)) {
-      Zotero.debug(`scihub: PDF temporarily unavailable at "${providerUrl}"`)
+      Zotero.debug(`pdferret: PDF temporarily unavailable at "${providerUrl}"`)
       throw new PdfNotReadyError(`PDF temporarily unavailable: ${providerUrl}`)
     } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfNotAvailable(doc, provider)) {
-      Zotero.debug(`scihub: PDF is not available at the moment "${providerUrl}"`)
+      Zotero.debug(`pdferret: PDF is not available at the moment "${providerUrl}"`)
       throw new PdfNotFoundError(`PDF is not available: ${providerUrl}`)
     } else {
-      Zotero.debug(`scihub: failed to fetch PDF from "${providerUrl}"`)
+      Zotero.debug(`pdferret: failed to fetch PDF from "${providerUrl}"`)
       throw new UnknownError(`PDF not found in page (status: ${statusCode})`)
     }
   }
@@ -370,24 +370,24 @@ class Scihub {
 
   // Preferences pane methods - called from preferences.xhtml
   private static readonly XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul'
-  private static readonly PREF_AUTOMATIC = 'zoteroscihub.automatic_pdf_download'
-  private static readonly PREF_ACTIVE_PROVIDER = 'zoteroscihub.active_provider'
-  private static readonly PREF_LEGACY_SCIHUB_URL = 'zoteroscihub.scihub_url'
+  private static readonly PREF_AUTOMATIC = 'pdferret.automatic_pdf_download'
+  private static readonly PREF_ACTIVE_PROVIDER = 'pdferret.active_provider'
+  private static readonly PREF_LEGACY_SCIHUB_URL = 'pdferret.scihub_url'
 
   public onPrefsLoad(doc: Document): void {
-    Zotero.debug('Scihub: onPrefsLoad called')
+    Zotero.debug('PDFerret: onPrefsLoad called')
 
     const automaticCheckbox = doc.getElementById('pref-automatic-pdf-download') as HTMLInputElement | null
     const providerSelect = doc.getElementById('pref-provider-select') as HTMLSelectElement | null
     const scihubUrlInput = doc.getElementById('pref-scihub-url') as HTMLInputElement | null
 
     if (!automaticCheckbox || !providerSelect || !scihubUrlInput) {
-      Zotero.debug('Scihub: preferences DOM elements not found')
+      Zotero.debug('PDFerret: preferences DOM elements not found')
       return
     }
 
     // Set initial values
-    automaticCheckbox.checked = Zotero.Prefs.get(Scihub.PREF_AUTOMATIC) !== false
+    automaticCheckbox.checked = Zotero.Prefs.get(PDFerret.PREF_AUTOMATIC) !== false
     scihubUrlInput.value = this.loadScihubUrl()
 
     // Populate provider dropdown
@@ -397,12 +397,12 @@ class Scihub {
     // Event listeners
     automaticCheckbox.addEventListener('command', () => {
       const cb = doc.getElementById('pref-automatic-pdf-download') as HTMLInputElement
-      Zotero.Prefs.set(Scihub.PREF_AUTOMATIC, cb.checked)
+      Zotero.Prefs.set(PDFerret.PREF_AUTOMATIC, cb.checked)
     })
 
     providerSelect.addEventListener('command', () => {
       const select = doc.getElementById('pref-provider-select') as HTMLSelectElement
-      Zotero.Prefs.set(Scihub.PREF_ACTIVE_PROVIDER, select.value)
+      Zotero.Prefs.set(PDFerret.PREF_ACTIVE_PROVIDER, select.value)
       this.updateScihubUrlVisibility(doc)
     })
 
@@ -411,10 +411,10 @@ class Scihub {
       if (url && !url.endsWith('/')) {
         url += '/'
       }
-      Zotero.Prefs.set(Scihub.PREF_LEGACY_SCIHUB_URL, url)
+      Zotero.Prefs.set(PDFerret.PREF_LEGACY_SCIHUB_URL, url)
     })
 
-    Zotero.debug('Scihub: preferences initialization complete')
+    Zotero.debug('PDFerret: preferences initialization complete')
   }
 
   public onPrefsShowAddForm(doc: Document): void {
@@ -499,10 +499,10 @@ class Scihub {
     }
 
     const providers = providerManager.getProviders()
-    const activeId = (Zotero.Prefs.get(Scihub.PREF_ACTIVE_PROVIDER) as string) || 'scihub'
+    const activeId = (Zotero.Prefs.get(PDFerret.PREF_ACTIVE_PROVIDER) as string) || 'scihub'
 
     for (const provider of providers) {
-      const menuitem = doc.createElementNS(Scihub.XUL_NS, 'menuitem')
+      const menuitem = doc.createElementNS(PDFerret.XUL_NS, 'menuitem')
       menuitem.setAttribute('value', provider.id)
       menuitem.setAttribute('label', provider.name)
       providerPopup.appendChild(menuitem)
@@ -541,26 +541,26 @@ class Scihub {
     }
 
     for (const provider of customProviders) {
-      const row = doc.createElementNS(Scihub.XUL_NS, 'hbox') as HTMLElement
+      const row = doc.createElementNS(PDFerret.XUL_NS, 'hbox') as HTMLElement
       row.setAttribute('align', 'center')
       row.style.cssText = 'margin-bottom: 8px; padding: 8px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.8;'
 
-      const infoBox = doc.createElementNS(Scihub.XUL_NS, 'vbox')
+      const infoBox = doc.createElementNS(PDFerret.XUL_NS, 'vbox')
       infoBox.setAttribute('flex', '1')
 
-      const nameLabel = doc.createElementNS(Scihub.XUL_NS, 'label')
+      const nameLabel = doc.createElementNS(PDFerret.XUL_NS, 'label')
       nameLabel.setAttribute('value', provider.name)
       ;(nameLabel as HTMLElement).style.fontWeight = 'bold'
       infoBox.appendChild(nameLabel)
 
-      const urlLabel = doc.createElementNS(Scihub.XUL_NS, 'label')
+      const urlLabel = doc.createElementNS(PDFerret.XUL_NS, 'label')
       urlLabel.setAttribute('value', provider.urlTemplate)
       ;(urlLabel as HTMLElement).style.cssText = 'font-size: 11px; opacity: 0.7;'
       infoBox.appendChild(urlLabel)
 
       row.appendChild(infoBox)
 
-      const deleteBtn = doc.createElementNS(Scihub.XUL_NS, 'button')
+      const deleteBtn = doc.createElementNS(PDFerret.XUL_NS, 'button')
       deleteBtn.setAttribute('label', getString('prefs-btn-delete'))
       deleteBtn.setAttribute('data-provider-id', provider.id)
       deleteBtn.addEventListener('click', e => {
@@ -584,7 +584,7 @@ class Scihub {
   }
 
   private loadScihubUrl(): string {
-    const legacyUrl = Zotero.Prefs.get(Scihub.PREF_LEGACY_SCIHUB_URL) as string | undefined
+    const legacyUrl = Zotero.Prefs.get(PDFerret.PREF_LEGACY_SCIHUB_URL) as string | undefined
     if (legacyUrl && typeof legacyUrl === 'string') {
       return legacyUrl.replace(/\/$/, '')
     }
@@ -592,18 +592,18 @@ class Scihub {
   }
 }
 
-Zotero.Scihub = new Scihub()
+Zotero.PDFerret = new PDFerret()
 
 // Legacy initialization for Zotero 6 compatibility (if XUL overlays are still used)
 // In Zotero 7/8, initialization is handled by bootstrap.ts
 if (typeof window !== 'undefined' && typeof rootURI === 'undefined') {
   // Only attach listeners in legacy mode (non-bootstrap)
   window.addEventListener('load', _ => {
-    Zotero.Scihub.load()
+    Zotero.PDFerret.load()
   }, false)
   window.addEventListener('unload', _ => {
-    Zotero.Scihub.unload()
+    Zotero.PDFerret.unload()
   }, false)
 }
 
-export { Scihub }
+export { PDFerret }

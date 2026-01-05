@@ -19,10 +19,10 @@ import {
   timeoutItem,
   tempUnavailableItem
 } from './zoteroItem.mock'
-import { Scihub } from '../content/scihub'
+import { PDFerret } from '../content/pdferret'
 import { providerManager } from '../content/providers'
 
-Zotero.Scihub = new Scihub()
+Zotero.PDFerret = new PDFerret()
 providerManager.initialize()
 
 // Mock HTTP responses based on URL
@@ -62,7 +62,7 @@ const mockResponses: Record<string, MockResponse> = {
   },
 }
 
-describe('Scihub test', () => {
+describe('PDFerret test', () => {
   describe('updateItems', () => {
     let attachmentSpy: MockInstance
 
@@ -101,22 +101,22 @@ describe('Scihub test', () => {
     })
 
     it('does nothing if there is no items to update', async () => {
-      await Zotero.Scihub.updateItems([])
+      await Zotero.PDFerret.updateItems([])
       expect(attachmentSpy).not.toHaveBeenCalled()
     })
 
     it('skips non-regular items', async () => {
-      await Zotero.Scihub.updateItems([nonRegularItem])
+      await Zotero.PDFerret.updateItems([nonRegularItem])
       expect(attachmentSpy).not.toHaveBeenCalled()
     })
 
     it('skips items without DOI', async () => {
-      await Zotero.Scihub.updateItems([itemWithoutDOI])
+      await Zotero.PDFerret.updateItems([itemWithoutDOI])
       expect(attachmentSpy).not.toHaveBeenCalled()
     })
 
     it('attaches PDFs to items it processes', async () => {
-      await Zotero.Scihub.updateItems([regularItem1, DOIinExtraItem, DOIinUrlItem])
+      await Zotero.PDFerret.updateItems([regularItem1, DOIinExtraItem, DOIinUrlItem])
 
       expect(attachmentSpy).toHaveBeenCalledTimes(3)
 
@@ -135,7 +135,7 @@ describe('Scihub test', () => {
 
     it('unavailable item shows popup and continues execution', async () => {
       // regularItem2 has no PDF available
-      await Zotero.Scihub.updateItems([regularItem2, regularItem1])
+      await Zotero.PDFerret.updateItems([regularItem2, regularItem1])
 
       expect(progressWindowSpy).toHaveBeenCalledWith('Error')
       expect(attachmentSpy).toHaveBeenCalledTimes(1)
@@ -143,7 +143,7 @@ describe('Scihub test', () => {
 
     it('unavailable item with rich error message shows popup and continues execution', async () => {
       // unavailableItem has no PDF available, but reports different error
-      await Zotero.Scihub.updateItems([unavailableItem, regularItem1])
+      await Zotero.PDFerret.updateItems([unavailableItem, regularItem1])
 
       expect(progressWindowSpy).toHaveBeenCalledWith('Error')
       expect(attachmentSpy).toHaveBeenCalledTimes(1)
@@ -154,7 +154,7 @@ describe('Scihub test', () => {
       const alertSpy = vi.spyOn(globalThis, 'alert').mockImplementation(() => {})
 
       // captchaItem has weird response
-      await Zotero.Scihub.updateItems([captchaItem, regularItem1])
+      await Zotero.PDFerret.updateItems([captchaItem, regularItem1])
 
       expect(launchURLSpy).toHaveBeenCalledTimes(1)
       expect(attachmentSpy).not.toHaveBeenCalled()
@@ -166,7 +166,7 @@ describe('Scihub test', () => {
     it('connection error shows popup and stops execution without redirect', async () => {
       const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
 
-      await Zotero.Scihub.updateItems([connectionErrorItem, regularItem1])
+      await Zotero.PDFerret.updateItems([connectionErrorItem, regularItem1])
 
       // Should show error popup (not alert)
       expect(progressWindowSpy).toHaveBeenCalledWith('Error')
@@ -181,7 +181,7 @@ describe('Scihub test', () => {
     it('timeout error shows popup and stops execution without redirect', async () => {
       const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
 
-      await Zotero.Scihub.updateItems([timeoutItem, regularItem1])
+      await Zotero.PDFerret.updateItems([timeoutItem, regularItem1])
 
       // Should show error popup (not alert)
       expect(progressWindowSpy).toHaveBeenCalledWith('Error')
@@ -197,7 +197,7 @@ describe('Scihub test', () => {
       const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
       const alertSpy = vi.spyOn(globalThis, 'alert').mockImplementation(() => {})
 
-      await Zotero.Scihub.updateItems([rateLimitedItem, regularItem1])
+      await Zotero.PDFerret.updateItems([rateLimitedItem, regularItem1])
 
       // Should redirect to provider (like captcha)
       expect(launchURLSpy).toHaveBeenCalledTimes(1)
@@ -212,7 +212,7 @@ describe('Scihub test', () => {
     it('temporarily unavailable shows popup and continues to next item', async () => {
       const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
 
-      await Zotero.Scihub.updateItems([tempUnavailableItem, regularItem1])
+      await Zotero.PDFerret.updateItems([tempUnavailableItem, regularItem1])
 
       // Should show error popup
       expect(progressWindowSpy).toHaveBeenCalledWith('Error')

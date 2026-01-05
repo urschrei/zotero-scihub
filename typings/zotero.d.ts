@@ -37,7 +37,7 @@ interface ProgressWindow {
 }
 
 interface IZotero {
-  Scihub: import('../content/scihub').Scihub
+  PDFerret: import('../content/pdferret').PDFerret
 
   debug: (msg: string) => void
   logError: (err: Error | string) => void

@@ -21,7 +21,7 @@ const BOOTSTRAP_REASONS: Record<number, string> = {
 
 function log(msg: string): void {
   if (Zotero?.debug) {
-    Zotero.debug(`Scihub bootstrap: ${msg}`)
+    Zotero.debug(`PDFerret bootstrap: ${msg}`)
   }
 }
 
@@ -51,13 +51,13 @@ export async function startup({ resourceURI, rootURI = resourceURI.spec }: {
       .getService(Ci.amIAddonManagerStartup)
     const manifestURI = Services.io.newURI(`${rootURI}manifest.json`)
     chromeHandle = aomStartup.registerChrome(manifestURI, [
-      ['content', 'zotero-scihub', 'content/'],
-      ['locale', 'zotero-scihub', 'en-US', 'locale/en-US/'],
+      ['content', 'pdferret', 'content/'],
+      ['locale', 'pdferret', 'en-US', 'locale/en-US/'],
     ])
 
     // Load the main plugin script
     Services.scriptloader.loadSubScriptWithOptions(
-      `${rootURI}content/scihub.js`,
+      `${rootURI}content/pdferret.js`,
       {
         target: {
           Zotero,
@@ -70,20 +70,20 @@ export async function startup({ resourceURI, rootURI = resourceURI.spec }: {
 
     // Register preference pane
     await Zotero.PreferencePanes.register({
-      pluginID: 'zotero-scihub@example.com',
+      pluginID: 'pdferret@example.com',
       src: `${rootURI}content/preferences.xhtml`,
-      label: 'Sci-Hub',
-      image: `${rootURI}skin/default/sci-hub-logo.svg`,
+      label: 'PDFerret',
+      image: `${rootURI}skin/default/pdferret-logo.svg`,
     })
 
     // Initialize the plugin
-    await Zotero.Scihub.startup(BOOTSTRAP_REASONS[reason])
+    await Zotero.PDFerret.startup(BOOTSTRAP_REASONS[reason])
 
     // If main window is already open, call onMainWindowLoad now
     const win = Zotero.getMainWindow()
     if (win) {
       log('main window already open, calling onMainWindowLoad')
-      Zotero.Scihub.onMainWindowLoad(win)
+      Zotero.PDFerret.onMainWindowLoad(win)
     }
 
     log('startup done')
@@ -105,8 +105,8 @@ export function shutdown(_data: {
   log('shutdown')
 
   // Unload the plugin
-  if (Zotero?.Scihub) {
-    Zotero.Scihub.shutdown()
+  if (Zotero?.PDFerret) {
+    Zotero.PDFerret.shutdown()
   }
 
   // Unregister chrome resources
@@ -115,24 +115,24 @@ export function shutdown(_data: {
     chromeHandle = null
   }
 
-  // Clear Zotero.Scihub namespace
-  if (Zotero?.Scihub) {
-    delete Zotero.Scihub
+  // Clear Zotero.PDFerret namespace
+  if (Zotero?.PDFerret) {
+    delete Zotero.PDFerret
   }
 }
 
 // Called when the main Zotero window loads
 export function onMainWindowLoad({ window: win }: { window: Window }): void {
   log('onMainWindowLoad')
-  if (Zotero?.Scihub) {
-    Zotero.Scihub.onMainWindowLoad(win)
+  if (Zotero?.PDFerret) {
+    Zotero.PDFerret.onMainWindowLoad(win)
   }
 }
 
 // Called when the main Zotero window unloads
 export function onMainWindowUnload({ window: win }: { window: Window }): void {
   log('onMainWindowUnload')
-  if (Zotero?.Scihub) {
-    Zotero.Scihub.onMainWindowUnload(win)
+  if (Zotero?.PDFerret) {
+    Zotero.PDFerret.onMainWindowUnload(win)
   }
 }

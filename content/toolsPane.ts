@@ -13,7 +13,7 @@ class ToolsPane {
       return isProcessable && isEditable
     }) as [ZoteroItem]
 
-    await Zotero.Scihub.updateItems(items)
+    await Zotero.PDFerret.updateItems(items)
   }
 }
 
