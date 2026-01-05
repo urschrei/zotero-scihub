@@ -1,5 +1,5 @@
 /**
- * Custom error classes for the Zotero Sci-Hub plugin.
+ * Custom error classes for the PDFerret plugin.
  * Each error type encapsulates its own behaviour for UI handling.
  */
 
@@ -7,7 +7,7 @@
  * Base error class for all plugin errors.
  * Subclasses define behaviour for processing flow and user notification.
  */
-export abstract class ScihubError extends Error {
+export abstract class PDFerretError extends Error {
   constructor(message: string) {
     super(message)
     Object.setPrototypeOf(this, new.target.prototype)
@@ -24,7 +24,7 @@ export abstract class ScihubError extends Error {
 }
 
 /** Network connection failed (server unreachable, DNS failure, etc.) */
-export class ConnectionError extends ScihubError {
+export class ConnectionError extends PDFerretError {
   name = 'ConnectionError'
 
   shouldStopProcessing(): boolean {
@@ -41,7 +41,7 @@ export class ConnectionError extends ScihubError {
 }
 
 /** Request timed out */
-export class TimeoutError extends ScihubError {
+export class TimeoutError extends PDFerretError {
   name = 'TimeoutError'
 
   shouldStopProcessing(): boolean {
@@ -58,7 +58,7 @@ export class TimeoutError extends ScihubError {
 }
 
 /** Provider requires captcha verification */
-export class CaptchaRequiredError extends ScihubError {
+export class CaptchaRequiredError extends PDFerretError {
   name = 'CaptchaRequiredError'
 
   shouldStopProcessing(): boolean {
@@ -75,7 +75,7 @@ export class CaptchaRequiredError extends ScihubError {
 }
 
 /** Rate limited by provider */
-export class RateLimitedError extends ScihubError {
+export class RateLimitedError extends PDFerretError {
   name = 'RateLimitedError'
 
   shouldStopProcessing(): boolean {
@@ -92,7 +92,7 @@ export class RateLimitedError extends ScihubError {
 }
 
 /** PDF not found in provider's database */
-export class PdfNotFoundError extends ScihubError {
+export class PdfNotFoundError extends PDFerretError {
   name = 'PdfNotFoundError'
 
   shouldStopProcessing(): boolean {
@@ -109,7 +109,7 @@ export class PdfNotFoundError extends ScihubError {
 }
 
 /** PDF might be available later (temporary unavailability) */
-export class PdfNotReadyError extends ScihubError {
+export class PdfNotReadyError extends PDFerretError {
   name = 'PdfNotReadyError'
 
   shouldStopProcessing(): boolean {
@@ -126,7 +126,7 @@ export class PdfNotReadyError extends ScihubError {
 }
 
 /** Unknown or unexpected error */
-export class UnknownError extends ScihubError {
+export class UnknownError extends PDFerretError {
   name = 'UnknownError'
 
   shouldStopProcessing(): boolean {

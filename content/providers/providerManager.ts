@@ -4,9 +4,9 @@ import { BUILTIN_PROVIDERS, DEFAULT_PROVIDER_ID, SCIHUB_PROVIDER } from './built
 
 declare const Zotero: IZotero
 
-const PREF_ACTIVE_PROVIDER = 'zoteroscihub.active_provider'
-const PREF_CUSTOM_PROVIDERS = 'zoteroscihub.custom_providers'
-const PREF_LEGACY_SCIHUB_URL = 'zoteroscihub.scihub_url'
+const PREF_ACTIVE_PROVIDER = 'pdferret.active_provider'
+const PREF_CUSTOM_PROVIDERS = 'pdferret.custom_providers'
+const PREF_LEGACY_SCIHUB_URL = 'pdferret.scihub_url'
 
 export class ProviderManager {
   private builtinProviders: Map<string, Provider> = new Map()

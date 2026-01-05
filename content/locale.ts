@@ -9,17 +9,17 @@ let l10n: any = null
  * Must be called during plugin startup after chrome registration.
  */
 export function initLocale(): void {
-  l10n = new Localization(['zotero-scihub.ftl'], true) // true = sync mode
+  l10n = new Localization(['pdferret.ftl'], true) // true = sync mode
 }
 
 /**
  * Get a localised string by its Fluent ID.
- * @param id - The Fluent message ID (without the zotero-scihub- prefix)
+ * @param id - The Fluent message ID (without the pdferret- prefix)
  * @param args - Optional arguments for parameterised messages
  * @returns The localised string, or the ID if not found
  */
 export function getString(id: string, args?: Record<string, string>): string {
   if (!l10n) return id
-  const result = l10n.formatValueSync(`zotero-scihub-${id}`, args) as string | null
+  const result = l10n.formatValueSync(`pdferret-${id}`, args) as string | null
   return result ?? id
 }

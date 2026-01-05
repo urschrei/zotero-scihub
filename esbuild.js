@@ -91,8 +91,8 @@ function copyPreferences() {
 // The toolkit checks `typeof ChromeUtils.import === "undefined"` but in Zotero 8,
 // ChromeUtils.import exists (just deprecated). We need to check for importESModule first.
 function patchImportESModule() {
-  const scihubPath = path.join(__dirname, 'build', 'content', 'scihub.js')
-  let content = fs.readFileSync(scihubPath, 'utf-8')
+  const pdferretPath = path.join(__dirname, 'build', 'content', 'pdferret.js')
+  let content = fs.readFileSync(pdferretPath, 'utf-8')
 
   // Replace the flawed _importESModule function
   const oldPattern = /function _importESModule\(path\) \{\s*if \(typeof ChromeUtils\.import === "undefined"\) return ChromeUtils\.importESModule\(path, \{ global: "contextual" \}\);\s*if \(path\.endsWith\("\.sys\.mjs"\)\) path = path\.replace\(\/\\\.sys\\\.mjs\$\/, "\.jsm"\);\s*return ChromeUtils\.import\(path\);\s*\}/
@@ -105,7 +105,7 @@ function patchImportESModule() {
 
   if (oldPattern.test(content)) {
     content = content.replace(oldPattern, newFunction)
-    fs.writeFileSync(scihubPath, content)
+    fs.writeFileSync(pdferretPath, content)
     console.log('Patched _importESModule for Zotero 8 compatibility')
   } else {
     console.log('Warning: Could not find _importESModule pattern to patch')
@@ -127,16 +127,16 @@ async function build() {
     target: ['firefox115'],
     entryPoints: ['content/bootstrap.ts'],
     outfile: 'build/bootstrap.js',
-    globalName: 'ScihubBootstrap',
+    globalName: 'PDFerretBootstrap',
     footer: {
       js: `
 // Export bootstrap functions for Zotero
-var install = ScihubBootstrap.install;
-var uninstall = ScihubBootstrap.uninstall;
-var startup = ScihubBootstrap.startup;
-var shutdown = ScihubBootstrap.shutdown;
-var onMainWindowLoad = ScihubBootstrap.onMainWindowLoad;
-var onMainWindowUnload = ScihubBootstrap.onMainWindowUnload;
+var install = PDFerretBootstrap.install;
+var uninstall = PDFerretBootstrap.uninstall;
+var startup = PDFerretBootstrap.startup;
+var shutdown = PDFerretBootstrap.shutdown;
+var onMainWindowLoad = PDFerretBootstrap.onMainWindowLoad;
+var onMainWindowUnload = PDFerretBootstrap.onMainWindowUnload;
 `
     },
   })
@@ -147,12 +147,12 @@ var onMainWindowUnload = ScihubBootstrap.onMainWindowUnload;
     bundle: true,
     format: 'iife',
     target: ['firefox115'],
-    entryPoints: ['content/scihub.ts'],
+    entryPoints: ['content/pdferret.ts'],
     outdir: 'build/content',
-    banner: { js: 'if (!Zotero.Scihub) {\n' },
+    banner: { js: 'if (!Zotero.PDFerret) {\n' },
     footer: { js: '\n}' },
   })
-  console.log('Built scihub.js')
+  console.log('Built pdferret.js')
 
   // Patch toolkit's _importESModule for Zotero 8 compatibility
   patchImportESModule()

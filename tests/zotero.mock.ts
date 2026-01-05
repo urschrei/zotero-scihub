@@ -8,7 +8,7 @@ const progressWindowSpy = vi.fn()
 const httpRequestMock = vi.fn()
 
 const Zotero: IZotero = new class {
-  public Scihub
+  public PDFerret
   public initialized = true
 
   public debug(_msg: string) { return }

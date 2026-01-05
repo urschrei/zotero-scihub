@@ -1,37 +1,37 @@
 {
-  "name": "zotero-scihub",
-  "version": "2.0.0",
-  "description": "Download papers and books by DOI from Sci-Hub",
+  "name": "pdferret",
+  "version": "1.0.0",
+  "description": "Download papers and books by DOI from various providers",
+  "license": "BlueOak-1.0.0",
   "scripts": {
     "lint": "eslint --cache --cache-location .eslintcache/",
     "prebuild": "npm run lint",
     "build": "tsc --noEmit && node esbuild.js",
-    "postbuild": "cd build && zip -r ../zotero-scihub.xpi . -x '*.DS_Store'",
+    "postbuild": "cd build && zip -r ../pdferret.xpi . -x '*.DS_Store'",
     "release": "zp-release",
     "postversion": "git push --follow-tags",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
-    "clean": "rm -rf build zotero-scihub.xpi"
+    "clean": "rm -rf build pdferret.xpi"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ethanwillis/zotero-scihub.git"
+    "url": "https://github.com/urschrei/pdferret.git"
   },
   "author": {
-    "name": "ethanwillis",
-    "email": "example@example.com"
+    "name": "sth"
   },
   "bugs": {
-    "url": "https://github.com/ethanwillis/zotero-scihub/issues"
+    "url": "https://github.com/urschrei/pdferret/issues"
   },
-  "homepage": "https://github.com/ethanwillis/zotero-scihub",
+  "homepage": "https://github.com/urschrei/pdferret",
   "xpi": {
-    "name": "Sci-Hub Plugin for Zotero",
-    "id": "zotero-scihub@example.com",
-    "updateLink": "https://github.com/ethanwillis/zotero-scihub/releases/download/v{version}/zotero-scihub-{version}.xpi",
-    "releaseURL": "https://github.com/ethanwillis/zotero-scihub/releases/download/release/",
-    "iconURL": "chrome://zotero-scihub/skin/sci-hub-logo.svg",
+    "name": "PDFerret for Zotero",
+    "id": "pdferret@example.com",
+    "updateLink": "https://github.com/urschrei/pdferret/releases/download/v{version}/pdferret-{version}.xpi",
+    "releaseURL": "https://github.com/urschrei/pdferret/releases/download/release/",
+    "iconURL": "chrome://pdferret/skin/pdferret-logo.svg",
     "minVersion": "7.0",
     "maxVersion": "8.*"
   },

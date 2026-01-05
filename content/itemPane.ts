@@ -19,7 +19,7 @@ class ItemPane {
     const collection = zoteroPane.getSelectedCollection(false)
     if (collection) {
       const items = collection.getChildItems(false, false)
-      await Zotero.Scihub.updateItems(items)
+      await Zotero.PDFerret.updateItems(items)
     }
   }
 
@@ -31,7 +31,7 @@ class ItemPane {
       const items = zoteroPane.getSelectedItems()
       if (items && items.length > 0) {
         // Don't skip existing PDFs for explicitly selected items
-        await Zotero.Scihub.updateItems(items, false)
+        await Zotero.PDFerret.updateItems(items, false)
       }
     } catch (err) {
       Zotero.logError(err as Error)
