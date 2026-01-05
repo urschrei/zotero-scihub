@@ -49,9 +49,49 @@ zotero-scihub-popup-pdf-unavailable = PDF not available
 zotero-scihub-popup-try-later = Try again later.
 zotero-scihub-popup-fetching = Fetching PDF
 
-# Captcha Alert (with parameters)
-zotero-scihub-alert-captcha =
-    Captcha is required or the PDF is not yet ready for "{ $title }".
+# Error Messages - Titles (for popup headlines)
+zotero-scihub-error-connection-title = Connection Error
+zotero-scihub-error-timeout-title = Request Timed Out
+zotero-scihub-error-captcha-title = Captcha Required
+zotero-scihub-error-rate-limited-title = Rate Limited
+zotero-scihub-error-pdf-not-found-title = PDF Not Found
+zotero-scihub-error-pdf-not-ready-title = PDF Not Ready
+zotero-scihub-error-unknown-title = Error
+
+# Error Messages - Full descriptions (with parameters)
+zotero-scihub-error-connection =
+    Could not connect to the provider.
+    Please check your internet connection and try again.
+    Item: "{ $title }"
+
+zotero-scihub-error-timeout =
+    The request timed out.
+    The provider may be slow or unreachable. Please try again later.
+    Item: "{ $title }"
+
+zotero-scihub-error-captcha =
+    The provider requires captcha verification.
+    You will be redirected to complete the captcha.
+    Restart the PDF download manually afterwards.
+    Item: "{ $title }"
+
+zotero-scihub-error-rate-limited =
+    Too many requests. The provider has rate-limited you.
     You will be redirected to the provider page.
-    Restart fetching process manually.
-    Error message: { $error }
+    Please wait a moment before trying again.
+    Item: "{ $title }"
+
+zotero-scihub-error-pdf-not-found =
+    The PDF was not found in the provider's database.
+    This paper may not be available through this provider.
+    Item: "{ $title }"
+
+zotero-scihub-error-pdf-not-ready =
+    The PDF is not ready yet but may become available later.
+    Try again in a few minutes.
+    Item: "{ $title }"
+
+zotero-scihub-error-unknown =
+    An unexpected error occurred.
+    Item: "{ $title }"
+    Details: { $error }

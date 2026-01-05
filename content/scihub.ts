@@ -7,6 +7,16 @@ import { MenuManager } from 'zotero-plugin-toolkit'
 import { providerManager, pdfExtractor } from './providers'
 import type { Provider } from './providers'
 import { getString, initLocale } from './locale'
+import {
+  ScihubError,
+  ConnectionError,
+  TimeoutError,
+  CaptchaRequiredError,
+  RateLimitedError,
+  PdfNotFoundError,
+  PdfNotReadyError,
+  UnknownError
+} from './errors'
 
 declare const Zotero: IZotero
 declare const window: Window | undefined
@@ -17,14 +27,6 @@ const Menu = new MenuManager()
 
 enum HttpCodes {
   DONE = 200,
-}
-
-class PdfNotFoundError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'PdfNotFoundError'
-    Object.setPrototypeOf(this, PdfNotFoundError.prototype)
-  }
 }
 
 class ItemObserver implements ZoteroObserver {
@@ -207,19 +209,37 @@ class Scihub {
       try {
         await this.updateItem(providerUrl, item, provider, doi)
       } catch (error) {
-        if (error instanceof PdfNotFoundError) {
-          // Do not stop traversing items if PDF is missing for one of them
-          // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-          ZoteroUtil.showPopup(getString('popup-pdf-unavailable'), `${getString('popup-try-later')}\n"${item.getField('title')}"`, true, 5, provider.name)
+        if (error instanceof ScihubError) {
+          // Get localised error message
+          const message = getString(error.getLocaleKey(), {
+            title: item.getField('title'),
+            error: error.message,
+          })
+
+          if (error.shouldRedirectToProvider()) {
+            // Alert and redirect (captcha, rate limit)
+            const alertFn = Zotero.getMainWindow()?.alert || alert
+            alertFn(message)
+            Zotero.launchURL(providerUrl.href)
+          } else {
+            // Show popup only (connection error, PDF not found, etc.)
+            const titleKey = `${error.getLocaleKey()}-title`
+            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+            ZoteroUtil.showPopup(getString(titleKey), message, true, 5, provider.name)
+          }
+
+          if (error.shouldStopProcessing()) {
+            break
+          }
           continue
         } else {
-          // Break if Captcha is reached, alert user and redirect
-          const alertFn = Zotero.getMainWindow()?.alert || alert
-          alertFn(getString('alert-captcha', {
+          // Unknown error type - treat as fatal, show popup and stop
+          const message = getString('error-unknown', {
             title: item.getField('title'),
             error: String(error),
-          }))
-          Zotero.launchURL(providerUrl.href)
+          })
+          // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+          ZoteroUtil.showPopup(getString('error-unknown-title'), message, true, 5, provider.name)
           break
         }
       }
@@ -230,15 +250,20 @@ class Scihub {
     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
     ZoteroUtil.showPopup(getString('popup-fetching'), item.getField('title'), false, 5, provider.name)
 
-    const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) ' +
-      'AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'
-    const xhr = await Zotero.HTTP.request('GET', providerUrl.href, {
-      responseType: 'document',
-      headers: { 'User-Agent': userAgent },
-    })
+    // Fetch page (may throw ConnectionError, TimeoutError, UnknownError)
+    const { doc, statusCode } = await this.fetchProviderPage(providerUrl)
 
-    const doc = xhr.responseXML
-    const statusCode: number = xhr.status
+    // Check for rate limiting first (before content analysis)
+    if (pdfExtractor.isRateLimited(doc, statusCode)) {
+      Zotero.debug(`scihub: rate limited by "${providerUrl}"`)
+      throw new RateLimitedError(`Rate limited by provider: ${providerUrl}`)
+    }
+
+    // Check for captcha requirement
+    if (pdfExtractor.isCaptchaRequired(doc)) {
+      Zotero.debug(`scihub: captcha required at "${providerUrl}"`)
+      throw new CaptchaRequiredError(`Captcha required: ${providerUrl}`)
+    }
 
     // Extract PDF URL using provider-specific logic
     const rawPdfUrl = pdfExtractor.extractPdfUrl(doc, provider)
@@ -249,12 +274,52 @@ class Scihub {
       const normalisedUrl = pdfExtractor.normalisePdfUrl(rawPdfUrl, baseUrl)
       const httpsUrl = UrlUtil.urlToHttps(normalisedUrl)
       await ZoteroUtil.attachRemotePDFToItem(httpsUrl, item, doi)
+    } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfTemporarilyUnavailable(doc)) {
+      Zotero.debug(`scihub: PDF temporarily unavailable at "${providerUrl}"`)
+      throw new PdfNotReadyError(`PDF temporarily unavailable: ${providerUrl}`)
     } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfNotAvailable(doc, provider)) {
       Zotero.debug(`scihub: PDF is not available at the moment "${providerUrl}"`)
-      throw new PdfNotFoundError(`Pdf is not available: ${providerUrl}`)
+      throw new PdfNotFoundError(`PDF is not available: ${providerUrl}`)
     } else {
       Zotero.debug(`scihub: failed to fetch PDF from "${providerUrl}"`)
-      throw new Error(`PDF not found in page (status: ${statusCode})`)
+      throw new UnknownError(`PDF not found in page (status: ${statusCode})`)
+    }
+  }
+
+  private async fetchProviderPage(providerUrl: URL): Promise<{ doc: Document | null; statusCode: number }> {
+    const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) ' +
+      'AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'
+
+    try {
+      const xhr = await Zotero.HTTP.request('GET', providerUrl.href, {
+        responseType: 'document',
+        headers: { 'User-Agent': userAgent },
+      })
+      return { doc: xhr.responseXML, statusCode: xhr.status }
+    } catch (error) {
+      const errorMsg = String(error).toLowerCase()
+
+      // Detect connection errors
+      if (errorMsg.includes('network') ||
+          errorMsg.includes('dns') ||
+          errorMsg.includes('econnrefused') ||
+          errorMsg.includes('enotfound') ||
+          errorMsg.includes('unreachable') ||
+          errorMsg.includes('connection') ||
+          errorMsg.includes('failed to fetch') ||
+          errorMsg.includes('check your internet')) {
+        throw new ConnectionError(`Connection failed: ${error}`)
+      }
+
+      // Detect timeout errors
+      if (errorMsg.includes('timeout') ||
+          errorMsg.includes('timed out') ||
+          errorMsg.includes('etimedout')) {
+        throw new TimeoutError(`Request timed out: ${error}`)
+      }
+
+      // Re-throw as unknown error
+      throw new UnknownError(`Unexpected error: ${error}`)
     }
   }
 
