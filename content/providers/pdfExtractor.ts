@@ -59,24 +59,26 @@ export class PdfExtractor {
   }
 
   /**
-   * Check if the page indicates a captcha is required
+   * Check if the page indicates a captcha is required.
+   * Uses element checks rather than text matching to avoid false positives
+   * from captcha-related code in scripts.
    */
   public isCaptchaRequired(doc: Document | null): boolean {
     if (!doc) return false
 
-    const body = doc.querySelector('body')
-    const innerHTML = body?.innerHTML ?? ''
+    // Check for actual captcha container elements, not just text mentions
+    const hasCaptchaContainer =
+      doc.querySelector('.g-recaptcha') !== null ||
+      doc.querySelector('.h-captcha') !== null ||
+      doc.querySelector('.cf-turnstile') !== null ||
+      doc.querySelector('#captcha') !== null ||
+      doc.querySelector('[data-sitekey]') !== null
 
-    // Common captcha patterns
-    if (innerHTML.match(/captcha/i) ||
-        innerHTML.match(/challenge-form/i) ||
-        innerHTML.match(/g-recaptcha/i) ||
-        innerHTML.match(/h-captcha/i) ||
-        innerHTML.match(/cf-turnstile/i)) {
-      return true
-    }
+    // Check for captcha challenge forms that block the page
+    const hasBlockingCaptcha =
+      doc.querySelector('form[action*="captcha"]') !== null
 
-    return false
+    return hasCaptchaContainer || hasBlockingCaptcha
   }
 
   /**
