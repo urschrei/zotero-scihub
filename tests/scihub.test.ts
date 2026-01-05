@@ -43,7 +43,7 @@ const mockResponses: Record<string, MockResponse> = {
     status: 200,
   },
   'https://sci-hub.ru/captcha': {
-    html: '<html><body>Please complete the g-recaptcha challenge</body></html>',
+    html: '<html><body><div class="g-recaptcha" data-sitekey="xxx"></div></body></html>',
     status: 200,
   },
   'https://sci-hub.ru/42.0/69': {
