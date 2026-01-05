@@ -6,7 +6,11 @@ declare const Zotero: IZotero
 
 const PREF_ACTIVE_PROVIDER = 'pdferret.active_provider'
 const PREF_CUSTOM_PROVIDERS = 'pdferret.custom_providers'
+const PREF_BUILTIN_URL_OVERRIDES = 'pdferret.builtin_url_overrides'
 const PREF_LEGACY_SCIHUB_URL = 'pdferret.scihub_url'
+
+// Store default URL templates for built-in providers (for reset functionality)
+const defaultUrlTemplates: Map<string, string> = new Map()
 
 export class ProviderManager {
   private builtinProviders: Map<string, Provider> = new Map()
@@ -16,13 +20,17 @@ export class ProviderManager {
   public initialize(): void {
     if (this.initialized) return
 
-    // Load built-in providers
+    // Load built-in providers and store their default URLs
     for (const provider of BUILTIN_PROVIDERS) {
       this.builtinProviders.set(provider.id, { ...provider })
+      defaultUrlTemplates.set(provider.id, provider.urlTemplate)
     }
 
     // Migrate legacy Sci-Hub URL preference if present
     this.migrateLegacyPrefs()
+
+    // Load URL overrides for built-in providers
+    this.loadBuiltinUrlOverrides()
 
     // Load custom providers from preferences
     this.loadCustomProviders()
@@ -31,27 +39,52 @@ export class ProviderManager {
   }
 
   /**
-   * Migrate legacy zoteroscihub.scihub_url preference to the new provider system
+   * Migrate legacy zoteroscihub.scihub_url preference to the new URL overrides system
    */
   private migrateLegacyPrefs(): void {
     const legacyUrl = Zotero.Prefs.get(PREF_LEGACY_SCIHUB_URL)
     if (legacyUrl && typeof legacyUrl === 'string') {
-      // Update Sci-Hub provider's URL template if it differs from default
-      const scihubProvider = this.builtinProviders.get('scihub')
-      if (scihubProvider && legacyUrl !== SCIHUB_PROVIDER.urlTemplate) {
-        // Ensure the URL ends with {DOI} placeholder
+      // Check if we already have overrides (migration already done)
+      const existingOverrides = Zotero.Prefs.get(PREF_BUILTIN_URL_OVERRIDES)
+      if (!existingOverrides) {
+        // Migrate to new format
         let urlTemplate = legacyUrl.trim()
         if (!urlTemplate.endsWith('/')) {
           urlTemplate += '/'
         }
         urlTemplate += '{DOI}'
-        scihubProvider.urlTemplate = urlTemplate
+
+        // Only migrate if different from default
+        if (urlTemplate !== SCIHUB_PROVIDER.urlTemplate) {
+          const overrides: Record<string, string> = { scihub: urlTemplate }
+          Zotero.Prefs.set(PREF_BUILTIN_URL_OVERRIDES, JSON.stringify(overrides))
+        }
       }
     }
 
     // Ensure active provider is set
     if (Zotero.Prefs.get(PREF_ACTIVE_PROVIDER) === undefined) {
       Zotero.Prefs.set(PREF_ACTIVE_PROVIDER, DEFAULT_PROVIDER_ID)
+    }
+  }
+
+  /**
+   * Load URL overrides for built-in providers from preferences
+   */
+  private loadBuiltinUrlOverrides(): void {
+    const stored = Zotero.Prefs.get(PREF_BUILTIN_URL_OVERRIDES)
+    if (stored && typeof stored === 'string') {
+      try {
+        const overrides = JSON.parse(stored) as Record<string, string>
+        for (const [providerId, urlTemplate] of Object.entries(overrides)) {
+          const provider = this.builtinProviders.get(providerId)
+          if (provider && urlTemplate) {
+            provider.urlTemplate = urlTemplate
+          }
+        }
+      } catch (e) {
+        Zotero.debug(`ProviderManager: Failed to parse URL overrides: ${e}`)
+      }
     }
   }
 
@@ -123,7 +156,7 @@ export class ProviderManager {
   }
 
   /**
-   * Update a built-in provider's URL template
+   * Update a built-in provider's URL template and persist to preferences
    */
   public updateBuiltinProviderUrl(id: string, urlTemplate: string): void {
     const provider = this.builtinProviders.get(id)
@@ -132,12 +165,49 @@ export class ProviderManager {
     }
     provider.urlTemplate = urlTemplate
 
-    // For backwards compatibility, also update the legacy pref for Sci-Hub
-    if (id === 'scihub') {
-      // Extract base URL (remove {DOI} placeholder)
-      const baseUrl = `${urlTemplate.replace('{DOI}', '').replace(/\/$/, '')}/`
-      Zotero.Prefs.set(PREF_LEGACY_SCIHUB_URL, baseUrl)
+    // Persist to URL overrides
+    this.persistBuiltinUrlOverride(id, urlTemplate)
+  }
+
+  /**
+   * Persist a built-in provider's URL override to preferences
+   */
+  private persistBuiltinUrlOverride(id: string, urlTemplate: string): void {
+    let overrides: Record<string, string> = {}
+
+    // Load existing overrides
+    const stored = Zotero.Prefs.get(PREF_BUILTIN_URL_OVERRIDES)
+    if (stored && typeof stored === 'string') {
+      try {
+        overrides = JSON.parse(stored) as Record<string, string>
+      } catch {
+        // Start fresh if parsing fails
+      }
     }
+
+    // Update or remove the override
+    const defaultUrl = defaultUrlTemplates.get(id)
+    if (urlTemplate === defaultUrl) {
+      // Remove override if it matches the default
+      delete overrides[id]
+    } else {
+      overrides[id] = urlTemplate
+    }
+
+    // Save back to preferences
+    if (Object.keys(overrides).length > 0) {
+      Zotero.Prefs.set(PREF_BUILTIN_URL_OVERRIDES, JSON.stringify(overrides))
+    } else {
+      // Clear the preference if no overrides remain
+      Zotero.Prefs.set(PREF_BUILTIN_URL_OVERRIDES, '')
+    }
+  }
+
+  /**
+   * Get the default URL template for a built-in provider
+   */
+  public getDefaultUrlTemplate(id: string): string | undefined {
+    return defaultUrlTemplates.get(id)
   }
 
   /**

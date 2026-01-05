@@ -372,23 +372,21 @@ class PDFerret {
   private static readonly XUL_NS = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul'
   private static readonly PREF_AUTOMATIC = 'pdferret.automatic_pdf_download'
   private static readonly PREF_ACTIVE_PROVIDER = 'pdferret.active_provider'
-  private static readonly PREF_LEGACY_SCIHUB_URL = 'pdferret.scihub_url'
 
   public onPrefsLoad(doc: Document): void {
     Zotero.debug('PDFerret: onPrefsLoad called')
 
     const automaticCheckbox = doc.getElementById('pref-automatic-pdf-download') as HTMLInputElement | null
     const providerSelect = doc.getElementById('pref-provider-select') as HTMLSelectElement | null
-    const scihubUrlInput = doc.getElementById('pref-scihub-url') as HTMLInputElement | null
+    const builtinUrlInput = doc.getElementById('pref-builtin-url') as HTMLInputElement | null
 
-    if (!automaticCheckbox || !providerSelect || !scihubUrlInput) {
+    if (!automaticCheckbox || !providerSelect || !builtinUrlInput) {
       Zotero.debug('PDFerret: preferences DOM elements not found')
       return
     }
 
     // Set initial values
     automaticCheckbox.checked = Zotero.Prefs.get(PDFerret.PREF_AUTOMATIC) !== false
-    scihubUrlInput.value = this.loadScihubUrl()
 
     // Populate provider dropdown
     this.populateProviderDropdown(doc)
@@ -403,15 +401,19 @@ class PDFerret {
     providerSelect.addEventListener('command', () => {
       const select = doc.getElementById('pref-provider-select') as HTMLSelectElement
       Zotero.Prefs.set(PDFerret.PREF_ACTIVE_PROVIDER, select.value)
-      this.updateScihubUrlVisibility(doc)
+      this.updateBuiltinUrlSection(doc)
     })
 
-    scihubUrlInput.addEventListener('change', function() {
-      let url = (this).value.trim()
-      if (url && !url.endsWith('/')) {
-        url += '/'
+    builtinUrlInput.addEventListener('change', () => {
+      const select = doc.getElementById('pref-provider-select') as HTMLSelectElement
+      const input = doc.getElementById('pref-builtin-url') as HTMLInputElement
+      const providerId = select?.value
+      const provider = providerManager.getProvider(providerId)
+
+      if (provider?.isBuiltin && input) {
+        const urlTemplate = input.value.trim()
+        providerManager.updateBuiltinProviderUrl(providerId, urlTemplate)
       }
-      Zotero.Prefs.set(PDFerret.PREF_LEGACY_SCIHUB_URL, url)
     })
 
     Zotero.debug('PDFerret: preferences initialization complete')
@@ -509,15 +511,36 @@ class PDFerret {
     }
 
     providerSelect.value = activeId
-    this.updateScihubUrlVisibility(doc)
+    this.updateBuiltinUrlSection(doc)
   }
 
-  private updateScihubUrlVisibility(doc: Document): void {
+  private updateBuiltinUrlSection(doc: Document): void {
     const providerSelect = doc.getElementById('pref-provider-select') as HTMLSelectElement | null
-    const scihubUrlSection = doc.getElementById('scihub-url-section')
+    const builtinUrlSection = doc.getElementById('builtin-url-section')
+    const builtinUrlLabel = doc.getElementById('builtin-url-label')
+    const builtinUrlHelp = doc.getElementById('builtin-url-help')
+    const builtinUrlInput = doc.getElementById('pref-builtin-url') as HTMLInputElement | null
 
-    if (providerSelect && scihubUrlSection) {
-      scihubUrlSection.style.display = providerSelect.value === 'scihub' ? '' : 'none'
+    if (!providerSelect || !builtinUrlSection || !builtinUrlLabel || !builtinUrlHelp || !builtinUrlInput) {
+      return
+    }
+
+    const providerId = providerSelect.value
+    const provider = providerManager.getProvider(providerId)
+
+    if (provider?.isBuiltin) {
+      // Show URL section for built-in providers
+      builtinUrlSection.style.display = ''
+
+      // Update label and help text with provider name
+      builtinUrlLabel.setAttribute('value', getString('prefs-provider-url-label', { provider: provider.name }))
+      builtinUrlHelp.textContent = getString('prefs-provider-url-help', { provider: provider.name })
+
+      // Load current URL template for this provider
+      builtinUrlInput.value = provider.urlTemplate
+    } else {
+      // Hide URL section for custom providers (they have their own editing)
+      builtinUrlSection.style.display = 'none'
     }
   }
 
@@ -581,14 +604,6 @@ class PDFerret {
 
     this.populateProviderDropdown(doc)
     this.renderCustomProvidersList(doc)
-  }
-
-  private loadScihubUrl(): string {
-    const legacyUrl = Zotero.Prefs.get(PDFerret.PREF_LEGACY_SCIHUB_URL) as string | undefined
-    if (legacyUrl && typeof legacyUrl === 'string') {
-      return legacyUrl.replace(/\/$/, '')
-    }
-    return 'https://sci-hub.ru'
   }
 }
 

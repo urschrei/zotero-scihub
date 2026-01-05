@@ -12,9 +12,8 @@ pdferret-prefs-automatic =
     .label = Automatic PDF Download
 pdferret-prefs-provider-label =
     .value = Provider:
-pdferret-prefs-scihub-url-label =
-    .value = Sci-Hub URL:
-pdferret-prefs-scihub-url-help = Base URL for Sci-Hub (e.g. https://sci-hub.ru/)
+pdferret-prefs-provider-url-label = { $provider } URL:
+pdferret-prefs-provider-url-help = URL template for { $provider }. Use {"{DOI}"} as placeholder for the DOI.
 
 # Custom Providers Section
 pdferret-prefs-custom-title = Custom Providers
