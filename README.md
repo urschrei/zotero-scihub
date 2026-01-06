@@ -25,6 +25,40 @@ You can configure the plugin to automatically download and attach PDFs when item
 
 ### Configuration
 
+You can configure providers in **Preferences > PDFerret**:
+
+- **Automatic PDF Download**: When enabled, PDFerret will attempt to download PDFs for newly added items with DOIs
+- **Provider Selection**: Choose from built-in providers (Sci-Hub, Anna's Archive) or add custom providers
+- **Custom Providers**: Add your own PDF sources by specifying a URL template, CSS selector, and attribute
+
+## How It Works
+
+PDFerret uses Zotero's built-in [Custom PDF Resolvers](https://www.zotero.org/support/kb/custom_pdf_resolvers) system. When the plugin starts, it registers your configured providers as PDF resolvers in Zotero's `extensions.zotero.findPDFs.resolvers` preference.
+
+This means:
+
+- **Integration with Zotero**: PDFerret works with Zotero's native "Find Available PDF" functionality
+- **Automatic cleanup**: When the plugin is disabled or uninstalled, its resolver entries are removed
+- **Non-destructive**: Any resolvers you've manually configured are preserved
+
+### Custom Provider Configuration
+
+When adding a custom provider, you need to specify:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Name** | Display name for the provider | `My University` |
+| **URL Template** | URL with `{DOI}` placeholder | `https://example.com/{DOI}` |
+| **CSS Selector** | Selector to find the PDF element | `a[href*=".pdf"]` |
+| **Attribute** | HTML attribute containing the PDF URL | `href` |
+
+The built-in providers use these configurations:
+
+- **Sci-Hub**: Selector = `embed[type="application/pdf"], #pdf`, Attribute = `src`
+- **Anna's Archive**: Selector = `a[href*="/slow_download"]`, Attribute = `href`
+
+For more details on how Zotero's resolver system works, see the [Custom PDF Resolvers documentation](https://www.zotero.org/support/kb/custom_pdf_resolvers).
+
 ### DNS-over-HTTPS
 
 In case of malfunctioning or unsafe local DNS server, Zotero (as it's built on Firefox) might be configured with [Trusted Recursive Resolver](https://wiki.mozilla.org/Trusted_Recursive_Resolver) or DNS-over-HTTPS, where you could set your own DNS server just for Zotero without modifying network settings.
