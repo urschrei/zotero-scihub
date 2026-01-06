@@ -1,4 +1,4 @@
-import type { ZoteroItem, IZotero } from '../typings/zotero'
+import type { IZotero } from '../typings/zotero'
 
 declare const Zotero: IZotero
 
@@ -11,9 +11,12 @@ class ToolsPane {
       const isEditable: boolean = libraryId === null || libraryId === '' || Zotero.Libraries.isEditable(libraryId)
 
       return isProcessable && isEditable
-    }) as [ZoteroItem]
+    })
 
-    await Zotero.PDFerret.updateItems(items)
+    // Use Zotero's built-in PDF finding which uses our registered resolvers
+    if (items.length > 0) {
+      await Zotero.Attachments.addAvailablePDFs(items)
+    }
   }
 }
 

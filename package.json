@@ -1,6 +1,6 @@
 {
   "name": "pdferret",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Download papers and books by DOI from various providers",
   "license": "BlueOak-1.0.0",
   "scripts": {

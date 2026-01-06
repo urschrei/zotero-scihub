@@ -1,9 +1,26 @@
-import type { IZotero, IZoteroPane } from '../typings/zotero'
+import type { ZoteroItem, IZotero, IZoteroPane } from '../typings/zotero'
 declare const Zotero: IZotero
 
 // Get ZoteroPane via Zotero API (not a global in Zotero 7/8)
 function getZoteroPane(): IZoteroPane | null {
   return Zotero.getActiveZoteroPane?.() ?? null
+}
+
+/**
+ * Find available PDFs for items using Zotero's native resolver system.
+ * This uses the resolvers registered in extensions.zotero.findPDFs.resolvers
+ */
+async function findAvailablePDFs(items: ZoteroItem[]): Promise<void> {
+  // Filter to regular items only (not attachments/notes)
+  const regularItems = items.filter(item => item.isRegularItem())
+
+  if (regularItems.length === 0) {
+    return
+  }
+
+  // Use Zotero's built-in PDF finding which uses our registered resolvers
+  // addAvailablePDFs handles the progress window and bulk operations
+  await Zotero.Attachments.addAvailablePDFs(regularItems)
 }
 
 class ItemPane {
@@ -18,8 +35,8 @@ class ItemPane {
 
     const collection = zoteroPane.getSelectedCollection(false)
     if (collection) {
-      const items = collection.getChildItems(false, false)
-      await Zotero.PDFerret.updateItems(items)
+      const items = collection.getChildItems(false, false) as ZoteroItem[]
+      await findAvailablePDFs(items)
     }
   }
 
@@ -28,10 +45,9 @@ class ItemPane {
       const zoteroPane = getZoteroPane()
       if (!zoteroPane) return
 
-      const items = zoteroPane.getSelectedItems()
+      const items = zoteroPane.getSelectedItems() as ZoteroItem[]
       if (items && items.length > 0) {
-        // Don't skip existing PDFs for explicitly selected items
-        await Zotero.PDFerret.updateItems(items, false)
+        await findAvailablePDFs(items)
       }
     } catch (err) {
       Zotero.logError(err as Error)

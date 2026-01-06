@@ -1,228 +1,159 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers */
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-empty-function */
-
-import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest'
-import { JSDOM } from 'jsdom'
-import { Zotero, progressWindowSpy, httpRequestMock } from './zotero.mock'
-import {
-  nonRegularItem,
-  itemWithoutDOI,
-  regularItem1,
-  regularItem2,
-  DOIinExtraItem,
-  DOIinUrlItem,
-  captchaItem,
-  unavailableItem,
-  rateLimitedItem,
-  connectionErrorItem,
-  timeoutItem,
-  tempUnavailableItem
-} from './zoteroItem.mock'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { Zotero } from './zotero.mock'
 import { PDFerret } from '../content/pdferret'
 import { providerManager } from '../content/providers'
+import { resolverManager } from '../content/resolvers'
+
+// Resolver preference key (same as in resolverManager)
+const RESOLVER_PREF = 'extensions.zotero.findPDFs.resolvers'
 
 Zotero.PDFerret = new PDFerret()
-providerManager.initialize()
 
-// Mock HTTP responses based on URL
-// Format: { html: string, status: number } or 'network_error' or 'timeout'
-type MockResponse = { html: string; status: number } | 'network_error' | 'timeout'
+describe('PDFerret resolver integration', () => {
+  beforeEach(() => {
+    // Clear prefs before each test
+    ;(Zotero.Prefs as any).clear()
+    providerManager.initialize()
+  })
 
-const mockResponses: Record<string, MockResponse> = {
-  'https://sci-hub.ru/10.1037/a0023781': {
-    html: '<html><body><iframe id="pdf" src="http://example.com/regular_item_1.pdf" /></body></html>',
-    status: 200,
-  },
-  'https://sci-hub.ru/10.1029/2018JA025877': {
-    html: '<html><body><iframe id="pdf" src="https://example.com/doi_in_extra_item.pdf?param=val#tag" /></body></html>',
-    status: 200,
-  },
-  'https://sci-hub.ru/10.1080/00224490902775827': {
-    html: '<html><body><embed id="pdf" src="http://example.com/doi_in_url_item.pdf"></embed></body></html>',
-    status: 200,
-  },
-  'https://sci-hub.ru/captcha': {
-    html: '<html><body><div class="g-recaptcha" data-sitekey="xxx"></div></body></html>',
-    status: 200,
-  },
-  'https://sci-hub.ru/42.0/69': {
-    html: '<html><body>Please try to search again using DOI</body></html>',
-    status: 200,
-  },
-  'https://sci-hub.ru/rate-limited': {
-    html: '<html><body>Too many requests, slow down</body></html>',
-    status: 429,
-  },
-  'https://sci-hub.ru/connection-error': 'network_error',
-  'https://sci-hub.ru/timeout': 'timeout',
-  'https://sci-hub.ru/temp-unavailable': {
-    html: '<html><body>Server is busy, please try again later</body></html>',
-    status: 200,
-  },
-}
+  afterEach(() => {
+    // Clean up resolvers after each test
+    resolverManager.cleanup()
+  })
 
-describe('PDFerret test', () => {
-  describe('updateItems', () => {
-    let attachmentSpy: MockInstance
+  describe('syncResolvers', () => {
+    it('registers built-in providers as Zotero resolvers', () => {
+      Zotero.PDFerret.syncResolvers()
 
-    beforeEach(() => {
-      attachmentSpy = vi.spyOn(Zotero.Attachments, 'importFromURL')
+      const resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      expect(resolversJson).toBeDefined()
 
-      // Set up HTTP request mock to return appropriate responses with parsed document
-      httpRequestMock.mockImplementation(async (_method: string, url: string) => {
-        const response = mockResponses[url]
+      const resolvers = JSON.parse(resolversJson)
+      expect(resolvers).toHaveLength(2)
 
-        // Handle network errors
-        if (response === 'network_error') {
-          throw new Error('Error: Error connecting to server. Check your Internet connection.')
-        }
+      // Check Sci-Hub resolver
+      const scihub = resolvers.find((r: any) => r.name === 'Sci-Hub')
+      expect(scihub).toBeDefined()
+      expect(scihub.url).toContain('{doi}')
+      expect(scihub.mode).toBe('html')
+      expect(scihub.selector).toContain('embed')
+      expect(scihub.pdferretManaged).toBe(true)
 
-        // Handle timeout errors
-        if (response === 'timeout') {
-          throw new Error('Request timed out')
-        }
-
-        // Handle normal responses (with status code)
-        const { html, status } = response || { html: '   ', status: 200 }
-        const dom = new JSDOM(html, { contentType: 'text/html' })
-        return {
-          responseText: html,
-          responseXML: dom.window.document,
-          status,
-        } as unknown as XMLHttpRequest
-      })
+      // Check Anna's Archive resolver
+      const annas = resolvers.find((r: any) => r.name === "Anna's Archive SciDB")
+      expect(annas).toBeDefined()
+      expect(annas.url).toContain('annas-archive.org')
+      expect(annas.selector).toContain('slow_download')
+      expect(annas.pdferretManaged).toBe(true)
     })
 
-    afterEach(() => {
-      attachmentSpy.mockRestore()
-      httpRequestMock.mockClear()
-      progressWindowSpy.mockClear()
+    it('converts {DOI} to lowercase {doi} for Zotero compatibility', () => {
+      Zotero.PDFerret.syncResolvers()
+
+      const resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      const resolvers = JSON.parse(resolversJson)
+
+      // All URLs should use lowercase {doi}
+      for (const resolver of resolvers) {
+        expect(resolver.url).toContain('{doi}')
+        expect(resolver.url).not.toContain('{DOI}')
+      }
     })
 
-    it('does nothing if there is no items to update', async () => {
-      await Zotero.PDFerret.updateItems([])
-      expect(attachmentSpy).not.toHaveBeenCalled()
+    it('sets automatic flag based on preference', () => {
+      // Test with automatic enabled
+      Zotero.Prefs.set('pdferret.automatic_pdf_download', true)
+      Zotero.PDFerret.syncResolvers()
+
+      let resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      let resolvers = JSON.parse(resolversJson)
+      expect(resolvers[0].automatic).toBe(true)
+
+      // Test with automatic disabled
+      Zotero.Prefs.set('pdferret.automatic_pdf_download', false)
+      Zotero.PDFerret.syncResolvers()
+
+      resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      resolvers = JSON.parse(resolversJson)
+      expect(resolvers[0].automatic).toBe(false)
     })
 
-    it('skips non-regular items', async () => {
-      await Zotero.PDFerret.updateItems([nonRegularItem])
-      expect(attachmentSpy).not.toHaveBeenCalled()
+    it('preserves external resolvers when syncing', () => {
+      // Set up an external resolver (not from PDFerret)
+      const externalResolver = {
+        name: 'My Custom Resolver',
+        method: 'GET',
+        url: 'https://custom.example.com/{doi}',
+        mode: 'html',
+        selector: '#pdf-link',
+        automatic: false,
+      }
+      Zotero.Prefs.set(RESOLVER_PREF, JSON.stringify([externalResolver]), true)
+
+      // Sync PDFerret resolvers
+      Zotero.PDFerret.syncResolvers()
+
+      const resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      const resolvers = JSON.parse(resolversJson)
+
+      // Should have PDFerret resolvers + external resolver
+      expect(resolvers.length).toBeGreaterThan(2)
+
+      // External resolver should still be there
+      const external = resolvers.find((r: any) => r.name === 'My Custom Resolver')
+      expect(external).toBeDefined()
+      expect(external.pdferretManaged).toBeUndefined()
+    })
+  })
+
+  describe('cleanup', () => {
+    it('removes only PDFerret resolvers on cleanup', () => {
+      // Set up mixed resolvers
+      const mixedResolvers = [
+        { name: 'Sci-Hub', url: 'https://sci-hub.ru/{doi}', pdferretManaged: true },
+        { name: 'External', url: 'https://external.com/{doi}' },
+      ]
+      Zotero.Prefs.set(RESOLVER_PREF, JSON.stringify(mixedResolvers), true)
+
+      // Run cleanup
+      resolverManager.cleanup()
+
+      const resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      const resolvers = JSON.parse(resolversJson)
+
+      // Only external resolver should remain
+      expect(resolvers).toHaveLength(1)
+      expect(resolvers[0].name).toBe('External')
     })
 
-    it('skips items without DOI', async () => {
-      await Zotero.PDFerret.updateItems([itemWithoutDOI])
-      expect(attachmentSpy).not.toHaveBeenCalled()
+    it('clears preference when no external resolvers remain', () => {
+      // Set up only PDFerret resolvers
+      Zotero.PDFerret.syncResolvers()
+
+      // Run cleanup
+      resolverManager.cleanup()
+
+      const resolversJson = Zotero.Prefs.get(RESOLVER_PREF, true) as string
+      expect(resolversJson).toBe('')
+    })
+  })
+
+  describe('provider management', () => {
+    it('getActiveProvider returns default provider', () => {
+      const provider = Zotero.PDFerret.getActiveProvider()
+      expect(provider).toBeDefined()
+      expect(provider.id).toBe('scihub')
     })
 
-    it('attaches PDFs to items it processes', async () => {
-      await Zotero.PDFerret.updateItems([regularItem1, DOIinExtraItem, DOIinUrlItem])
-
-      expect(attachmentSpy).toHaveBeenCalledTimes(3)
-
-      expect(attachmentSpy.mock.calls[0][0].url).toBe('https://example.com/regular_item_1.pdf')
-      expect(attachmentSpy.mock.calls[0][0].fileBaseName).toBe('10.1037_a0023781')
-      expect(attachmentSpy.mock.calls[0][0].title).toBe('regularItemTitle1')
-
-      expect(attachmentSpy.mock.calls[1][0].url).toBe('https://example.com/doi_in_extra_item.pdf?param=val#tag')
-      expect(attachmentSpy.mock.calls[1][0].fileBaseName).toBe('10.1029_2018JA025877')
-      expect(attachmentSpy.mock.calls[1][0].title).toBe('DOIinExtraItemTitle')
-
-      expect(attachmentSpy.mock.calls[2][0].url).toBe('https://example.com/doi_in_url_item.pdf')
-      expect(attachmentSpy.mock.calls[2][0].fileBaseName).toBe('10.1080_00224490902775827')
-      expect(attachmentSpy.mock.calls[2][0].title).toBe('DOIinUrlItemTitle')
+    it('isAutomaticPdfDownload returns true by default', () => {
+      const automatic = Zotero.PDFerret.isAutomaticPdfDownload()
+      expect(automatic).toBe(true)
     })
 
-    it('unavailable item shows popup and continues execution', async () => {
-      // regularItem2 has no PDF available
-      await Zotero.PDFerret.updateItems([regularItem2, regularItem1])
-
-      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
-      expect(attachmentSpy).toHaveBeenCalledTimes(1)
-    })
-
-    it('unavailable item with rich error message shows popup and continues execution', async () => {
-      // unavailableItem has no PDF available, but reports different error
-      await Zotero.PDFerret.updateItems([unavailableItem, regularItem1])
-
-      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
-      expect(attachmentSpy).toHaveBeenCalledTimes(1)
-    })
-
-    it('captcha redirects user and stops execution', async () => {
-      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
-      const alertSpy = vi.spyOn(globalThis, 'alert').mockImplementation(() => {})
-
-      // captchaItem has weird response
-      await Zotero.PDFerret.updateItems([captchaItem, regularItem1])
-
-      expect(launchURLSpy).toHaveBeenCalledTimes(1)
-      expect(attachmentSpy).not.toHaveBeenCalled()
-
-      launchURLSpy.mockRestore()
-      alertSpy.mockRestore()
-    })
-
-    it('connection error shows popup and stops execution without redirect', async () => {
-      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
-
-      await Zotero.PDFerret.updateItems([connectionErrorItem, regularItem1])
-
-      // Should show error popup (not alert)
-      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
-      // Should NOT redirect to provider
-      expect(launchURLSpy).not.toHaveBeenCalled()
-      // Should stop processing (regularItem1 not fetched)
-      expect(attachmentSpy).not.toHaveBeenCalled()
-
-      launchURLSpy.mockRestore()
-    })
-
-    it('timeout error shows popup and stops execution without redirect', async () => {
-      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
-
-      await Zotero.PDFerret.updateItems([timeoutItem, regularItem1])
-
-      // Should show error popup (not alert)
-      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
-      // Should NOT redirect to provider
-      expect(launchURLSpy).not.toHaveBeenCalled()
-      // Should stop processing (regularItem1 not fetched)
-      expect(attachmentSpy).not.toHaveBeenCalled()
-
-      launchURLSpy.mockRestore()
-    })
-
-    it('rate limit error shows alert and redirects to provider', async () => {
-      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
-      const alertSpy = vi.spyOn(globalThis, 'alert').mockImplementation(() => {})
-
-      await Zotero.PDFerret.updateItems([rateLimitedItem, regularItem1])
-
-      // Should redirect to provider (like captcha)
-      expect(launchURLSpy).toHaveBeenCalledTimes(1)
-      expect(alertSpy).toHaveBeenCalled()
-      // Should stop processing
-      expect(attachmentSpy).not.toHaveBeenCalled()
-
-      launchURLSpy.mockRestore()
-      alertSpy.mockRestore()
-    })
-
-    it('temporarily unavailable shows popup and continues to next item', async () => {
-      const launchURLSpy = vi.spyOn(Zotero, 'launchURL')
-
-      await Zotero.PDFerret.updateItems([tempUnavailableItem, regularItem1])
-
-      // Should show error popup
-      expect(progressWindowSpy).toHaveBeenCalledWith('Error')
-      // Should NOT redirect to provider
-      expect(launchURLSpy).not.toHaveBeenCalled()
-      // Should continue processing (regularItem1 fetched)
-      expect(attachmentSpy).toHaveBeenCalledTimes(1)
-      expect(attachmentSpy.mock.calls[0][0].url).toBe('https://example.com/regular_item_1.pdf')
-
-      launchURLSpy.mockRestore()
+    it('isAutomaticPdfDownload respects preference', () => {
+      Zotero.Prefs.set('pdferret.automatic_pdf_download', false)
+      const automatic = Zotero.PDFerret.isAutomaticPdfDownload()
+      expect(automatic).toBe(false)
     })
   })
 })
