@@ -54,8 +54,8 @@ interface IZotero {
   }
 
   Prefs: {
-    get: (pref: string) => string | number | boolean | undefined
-    set: (pref: string, value: string | number | boolean) => any
+    get: (pref: string, global?: boolean) => string | number | boolean | undefined
+    set: (pref: string, value: string | number | boolean, global?: boolean) => any
   }
 
   Items: {
@@ -74,6 +74,7 @@ interface IZotero {
 
   Attachments: {
     importFromURL: (options: Record<string, any>) => Promise<ZoteroItem>
+    addAvailablePDFs: (items: ZoteroItem[]) => Promise<void>
   }
 
   Libraries: {

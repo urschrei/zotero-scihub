@@ -1,22 +1,11 @@
-import type { ZoteroItem, IZotero, ZoteroObserver } from '../typings/zotero'
+import type { IZotero } from '../typings/zotero'
 import { ItemPane } from './itemPane'
 import { ToolsPane } from './toolsPane'
-import { UrlUtil } from './urlUtil'
-import { ZoteroUtil } from './zoteroUtil'
 import { MenuManager } from 'zotero-plugin-toolkit'
-import { providerManager, pdfExtractor } from './providers'
+import { providerManager } from './providers'
+import { resolverManager } from './resolvers'
 import type { Provider } from './providers'
 import { getString, initLocale } from './locale'
-import {
-  PDFerretError,
-  ConnectionError,
-  TimeoutError,
-  CaptchaRequiredError,
-  RateLimitedError,
-  PdfNotFoundError,
-  PdfNotReadyError,
-  UnknownError
-} from './errors'
 
 declare const Zotero: IZotero
 declare const window: Window | undefined
@@ -25,26 +14,8 @@ declare const rootURI: string | undefined
 // Menu manager for Zotero 7/8
 const Menu = new MenuManager()
 
-enum HttpCodes {
-  DONE = 200,
-}
-
-class ItemObserver implements ZoteroObserver {
-  // Called when a new item is added to the library
-  public async notify(event: string, _type: string, ids: [number], _extraData: Record<string, any>) {
-    const automaticPdfDownload = Zotero.PDFerret.isAutomaticPdfDownload()
-
-    if (event === 'add' && automaticPdfDownload) {
-      const items = await Zotero.Items.getAsync(ids) as ZoteroItem[]
-      await Zotero.PDFerret.updateItems(items)
-    }
-  }
-}
-
 class PDFerret {
   private static readonly DEFAULT_AUTOMATIC_PDF_DOWNLOAD = true
-  private observerId: number | null = null
-  private initialized = false
   private menuIds: string[] = []
   public ItemPane: ItemPane
   public ToolsPane: ToolsPane
@@ -59,14 +30,14 @@ class PDFerret {
     Zotero.debug(`PDFerret: startup (${reason})`)
     initLocale()
     providerManager.initialize()
-    this.registerObserver()
+    this.syncResolvers()
   }
 
   // Called by bootstrap.ts on plugin shutdown
   public shutdown(): void {
     Zotero.debug('PDFerret: shutdown')
-    this.unregisterObserver()
     this.unregisterMenus()
+    resolverManager.cleanup()
   }
 
   // Called when main Zotero window loads
@@ -81,20 +52,14 @@ class PDFerret {
     this.unregisterMenus()
   }
 
-  // Register the item observer for automatic PDF downloads
-  private registerObserver(): void {
-    if (this.initialized) return
-    this.observerId = Zotero.Notifier.registerObserver(new ItemObserver(), ['item'], 'PDFerret')
-    this.initialized = true
-  }
-
-  // Unregister the item observer
-  private unregisterObserver(): void {
-    if (this.observerId) {
-      Zotero.Notifier.unregisterObserver(this.observerId)
-      this.observerId = null
-    }
-    this.initialized = false
+  /**
+   * Sync current providers to Zotero's PDF resolver preference.
+   * Called on startup and when providers are modified.
+   */
+  public syncResolvers(): void {
+    const providers = providerManager.getProviders()
+    const automatic = this.isAutomaticPdfDownload()
+    resolverManager.syncProviders(providers, automatic)
   }
 
   // Register context menu items using MenuManager
@@ -150,16 +115,6 @@ class PDFerret {
     return providerManager.getActiveProvider()
   }
 
-  /**
-   * Get the base URL for the active provider (legacy compatibility)
-   * @deprecated Use getActiveProvider() instead
-   */
-  public getBaseScihubUrl(): string {
-    const provider = providerManager.getActiveProvider()
-    // Extract base URL from template (remove {DOI} placeholder)
-    return `${provider.urlTemplate.replace('{DOI}', '').replace(/\/$/, '')}/`
-  }
-
   public isAutomaticPdfDownload(): boolean {
     if (Zotero.Prefs.get('pdferret.automatic_pdf_download') === undefined) {
       Zotero.Prefs.set('pdferret.automatic_pdf_download', PDFerret.DEFAULT_AUTOMATIC_PDF_DOWNLOAD)
@@ -168,204 +123,13 @@ class PDFerret {
     return Zotero.Prefs.get('pdferret.automatic_pdf_download') as boolean
   }
 
-  // Legacy methods - kept for compatibility but no longer used
+  // Legacy methods - kept for compatibility
   public load(): void {
-    this.registerObserver()
+    // No-op - resolvers are registered on startup
   }
 
   public unload(): void {
-    this.unregisterObserver()
-  }
-
-  public async updateItems(items: ZoteroItem[], skipExistingPdfs = true): Promise<void> {
-    // WARN: Sequentially go through items, parallel will fail due to rate-limiting
-    // Cycle needs to be broken if provider asks for Captcha,
-    // then user have to be redirected to the page to fill it in
-    const provider = providerManager.getActiveProvider()
-
-    for (const item of items) {
-      // Skip items which are not processable (attachments, notes, etc.)
-      if (!item.isRegularItem()) {
-        continue
-      }
-
-      // Skip items that already have a PDF attachment (only for bulk operations)
-      if (skipExistingPdfs && this.hasPdfAttachment(item)) {
-        Zotero.debug(`pdferret: skipping "${item.getField('title')}" - already has PDF`)
-        continue
-      }
-
-      // Skip items without DOI
-      const doi = this.getDoi(item)
-      if (!doi) {
-        // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-        ZoteroUtil.showPopup(getString('popup-doi-missing'), item.getField('title'), true, 5, provider.name)
-        Zotero.debug(`pdferret: failed to generate URL for "${item.getField('title')}"`)
-        continue
-      }
-
-      const providerUrl = new URL(provider.urlTemplate.replace('{DOI}', doi))
-
-      try {
-        await this.updateItem(providerUrl, item, provider, doi)
-      } catch (error) {
-        if (error instanceof PDFerretError) {
-          // Get localised error message
-          const message = getString(error.getLocaleKey(), {
-            title: item.getField('title'),
-            error: error.message,
-          })
-
-          if (error.shouldRedirectToProvider()) {
-            // Alert and redirect (captcha, rate limit)
-            const alertFn = Zotero.getMainWindow()?.alert || alert
-            alertFn(message)
-            Zotero.launchURL(providerUrl.href)
-          } else {
-            // Show popup only (connection error, PDF not found, etc.)
-            const titleKey = `${error.getLocaleKey()}-title`
-            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-            ZoteroUtil.showPopup(getString(titleKey), message, true, 5, provider.name)
-          }
-
-          if (error.shouldStopProcessing()) {
-            break
-          }
-          continue
-        } else {
-          // Unknown error type - treat as fatal, show popup and stop
-          const message = getString('error-unknown', {
-            title: item.getField('title'),
-            error: String(error),
-          })
-          // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-          ZoteroUtil.showPopup(getString('error-unknown-title'), message, true, 5, provider.name)
-          break
-        }
-      }
-    }
-  }
-
-  private async updateItem(providerUrl: URL, item: ZoteroItem, provider: Provider, doi: string) {
-    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    ZoteroUtil.showPopup(getString('popup-fetching'), item.getField('title'), false, 5, provider.name)
-
-    // Fetch page (may throw ConnectionError, TimeoutError, UnknownError)
-    const { doc, statusCode } = await this.fetchProviderPage(providerUrl)
-
-    // Check for rate limiting first (before content analysis)
-    if (pdfExtractor.isRateLimited(doc, statusCode)) {
-      Zotero.debug(`pdferret: rate limited by "${providerUrl}"`)
-      throw new RateLimitedError(`Rate limited by provider: ${providerUrl}`)
-    }
-
-    // Check for captcha requirement
-    if (pdfExtractor.isCaptchaRequired(doc)) {
-      Zotero.debug(`pdferret: captcha required at "${providerUrl}"`)
-      throw new CaptchaRequiredError(`Captcha required: ${providerUrl}`)
-    }
-
-    // Extract PDF URL using provider-specific logic
-    const rawPdfUrl = pdfExtractor.extractPdfUrl(doc, provider)
-
-    if (statusCode === (HttpCodes.DONE as number) && rawPdfUrl) {
-      // Normalise URL to absolute HTTPS
-      const baseUrl = `${provider.urlTemplate.replace('{DOI}', '').replace(/\/$/, '')}/`
-      const normalisedUrl = pdfExtractor.normalisePdfUrl(rawPdfUrl, baseUrl)
-      const httpsUrl = UrlUtil.urlToHttps(normalisedUrl)
-      await ZoteroUtil.attachRemotePDFToItem(httpsUrl, item, doi)
-    } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfTemporarilyUnavailable(doc)) {
-      Zotero.debug(`pdferret: PDF temporarily unavailable at "${providerUrl}"`)
-      throw new PdfNotReadyError(`PDF temporarily unavailable: ${providerUrl}`)
-    } else if (statusCode === (HttpCodes.DONE as number) && pdfExtractor.isPdfNotAvailable(doc, provider)) {
-      Zotero.debug(`pdferret: PDF is not available at the moment "${providerUrl}"`)
-      throw new PdfNotFoundError(`PDF is not available: ${providerUrl}`)
-    } else {
-      Zotero.debug(`pdferret: failed to fetch PDF from "${providerUrl}"`)
-      throw new UnknownError(`PDF not found in page (status: ${statusCode})`)
-    }
-  }
-
-  private async fetchProviderPage(providerUrl: URL): Promise<{ doc: Document | null; statusCode: number }> {
-    const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 11_3_1 like Mac OS X) ' +
-      'AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1'
-
-    try {
-      const xhr = await Zotero.HTTP.request('GET', providerUrl.href, {
-        responseType: 'document',
-        headers: { 'User-Agent': userAgent },
-      })
-      return { doc: xhr.responseXML, statusCode: xhr.status }
-    } catch (error) {
-      const errorMsg = String(error).toLowerCase()
-
-      // Detect connection errors
-      if (errorMsg.includes('network') ||
-          errorMsg.includes('dns') ||
-          errorMsg.includes('econnrefused') ||
-          errorMsg.includes('enotfound') ||
-          errorMsg.includes('unreachable') ||
-          errorMsg.includes('connection') ||
-          errorMsg.includes('failed to fetch') ||
-          errorMsg.includes('check your internet')) {
-        throw new ConnectionError(`Connection failed: ${error}`)
-      }
-
-      // Detect timeout errors
-      if (errorMsg.includes('timeout') ||
-          errorMsg.includes('timed out') ||
-          errorMsg.includes('etimedout')) {
-        throw new TimeoutError(`Request timed out: ${error}`)
-      }
-
-      // Re-throw as unknown error
-      throw new UnknownError(`Unexpected error: ${error}`)
-    }
-  }
-
-  private hasPdfAttachment(item: ZoteroItem): boolean {
-    const attachmentIds = item.getAttachments()
-    for (const id of attachmentIds) {
-      const attachment = Zotero.Items.get(id)
-      if (attachment?.attachmentContentType === 'application/pdf') {
-        return true
-      }
-    }
-    return false
-  }
-
-  private getDoi(item: ZoteroItem): string | null {
-    const doiField = item.getField('DOI')
-    const doiFromExtra = this.getDoiFromExtra(item)
-    const doiFromUrl = this.getDoiFromUrl(item)
-    const doi = doiField ?? doiFromExtra ?? doiFromUrl
-
-    if (doi && (typeof doi === 'string') && doi.length > 0) {
-      return doi
-    }
-    return null
-  }
-
-  private getDoiFromExtra(item: ZoteroItem): string | null {
-    // For books "extra" field might contain DOI instead
-    // values in extra are <key>: <value> separated by newline
-    const extra = item.getField('extra')
-    const match = extra?.match(/^DOI: (.+)$/m)
-    if (match) {
-      return match[1]
-    }
-    return null
-  }
-
-  private getDoiFromUrl(item: ZoteroItem): string | null {
-    // If item was added by the doi.org url it can be extracted from its pathname
-    const url = item.getField('url')
-    const isDoiOrg = url?.match(/\bdoi\.org\b/i)
-    if (isDoiOrg) {
-      const doiPath = new URL(url).pathname
-      return decodeURIComponent(doiPath).replace(/^\//, '')
-    }
-    return null
+    // No-op - resolvers are cleaned up on shutdown
   }
 
   // Preferences pane methods - called from preferences.xhtml
@@ -396,12 +160,15 @@ class PDFerret {
     automaticCheckbox.addEventListener('command', () => {
       const cb = doc.getElementById('pref-automatic-pdf-download') as HTMLInputElement
       Zotero.Prefs.set(PDFerret.PREF_AUTOMATIC, cb.checked)
+      // Re-sync resolvers with new automatic setting
+      this.syncResolvers()
     })
 
     providerSelect.addEventListener('command', () => {
       const select = doc.getElementById('pref-provider-select') as HTMLSelectElement
       Zotero.Prefs.set(PDFerret.PREF_ACTIVE_PROVIDER, select.value)
       this.updateBuiltinUrlSection(doc)
+      this.syncResolvers()
     })
 
     builtinUrlInput.addEventListener('change', () => {
@@ -413,6 +180,8 @@ class PDFerret {
       if (provider?.isBuiltin && input) {
         const urlTemplate = input.value.trim()
         providerManager.updateBuiltinProviderUrl(providerId, urlTemplate)
+        // Re-sync resolvers with updated URL
+        this.syncResolvers()
       }
     })
 
@@ -424,12 +193,14 @@ class PDFerret {
     const btnContainer = doc.getElementById('add-provider-btn-container')
     const nameInput = doc.getElementById('new-provider-name') as HTMLInputElement
     const urlInput = doc.getElementById('new-provider-url') as HTMLInputElement
-    const linkTextInput = doc.getElementById('new-provider-linktext') as HTMLInputElement
+    const selectorInput = doc.getElementById('new-provider-selector') as HTMLInputElement
+    const attributeInput = doc.getElementById('new-provider-attribute') as HTMLInputElement
 
-    if (form && btnContainer && nameInput && urlInput && linkTextInput) {
+    if (form && btnContainer && nameInput && urlInput && selectorInput && attributeInput) {
       nameInput.value = ''
       urlInput.value = ''
-      linkTextInput.value = getString('prefs-custom-linktext-default')
+      selectorInput.value = ''
+      attributeInput.value = 'href'
       form.style.display = ''
       btnContainer.style.display = 'none'
     }
@@ -448,13 +219,15 @@ class PDFerret {
   public onPrefsSaveProvider(doc: Document): void {
     const nameInput = doc.getElementById('new-provider-name') as HTMLInputElement
     const urlInput = doc.getElementById('new-provider-url') as HTMLInputElement
-    const linkTextInput = doc.getElementById('new-provider-linktext') as HTMLInputElement
+    const selectorInput = doc.getElementById('new-provider-selector') as HTMLInputElement
+    const attributeInput = doc.getElementById('new-provider-attribute') as HTMLInputElement
 
-    if (!nameInput || !urlInput || !linkTextInput) return
+    if (!nameInput || !urlInput || !selectorInput || !attributeInput) return
 
     const name = nameInput.value.trim()
     const urlTemplate = urlInput.value.trim()
-    const linkText = linkTextInput.value.trim()
+    const selector = selectorInput.value.trim()
+    const attribute = attributeInput.value.trim() || undefined
 
     // Validation
     const alertFn = Zotero.getMainWindow()?.alert || alert
@@ -470,8 +243,8 @@ class PDFerret {
       alertFn(getString('validation-url-doi'))
       return
     }
-    if (!linkText) {
-      alertFn(getString('validation-linktext-required'))
+    if (!selector) {
+      alertFn(getString('validation-selector-required'))
       return
     }
 
@@ -480,9 +253,13 @@ class PDFerret {
       id: providerManager.generateCustomProviderId(),
       name,
       urlTemplate,
-      linkText,
+      selector,
+      attribute,
     }
     providerManager.addCustomProvider(newProvider)
+
+    // Re-sync resolvers with new provider
+    this.syncResolvers()
 
     this.onPrefsHideAddForm(doc)
     this.populateProviderDropdown(doc)
@@ -581,6 +358,11 @@ class PDFerret {
       ;(urlLabel as HTMLElement).style.cssText = 'font-size: 11px; opacity: 0.7;'
       infoBox.appendChild(urlLabel)
 
+      const selectorLabel = doc.createElementNS(PDFerret.XUL_NS, 'label')
+      selectorLabel.setAttribute('value', `Selector: ${provider.selector}`)
+      ;(selectorLabel as HTMLElement).style.cssText = 'font-size: 11px; opacity: 0.7;'
+      infoBox.appendChild(selectorLabel)
+
       row.appendChild(infoBox)
 
       const deleteBtn = doc.createElementNS(PDFerret.XUL_NS, 'button')
@@ -601,6 +383,9 @@ class PDFerret {
   private deleteCustomProvider(doc: Document, id: string): void {
     // Use providerManager to remove (handles both in-memory and storage, plus active provider reset)
     providerManager.removeCustomProvider(id)
+
+    // Re-sync resolvers
+    this.syncResolvers()
 
     this.populateProviderDropdown(doc)
     this.renderCustomProvidersList(doc)

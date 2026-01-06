@@ -38,17 +38,23 @@
 
     <vbox id="add-provider-form" style="border: 1px solid #ccc; padding: 10px; border-radius: 4px; display: none;">
       <hbox align="center" style="margin-bottom: 8px;">
-        <label data-l10n-id="pdferret-prefs-custom-name" style="margin-right: 10px; min-width: 80px;"/>
+        <label data-l10n-id="pdferret-prefs-custom-name" style="margin-right: 10px; min-width: 100px;"/>
         <html:input type="text" id="new-provider-name" placeholder="My Provider" style="flex: 1;"/>
       </hbox>
       <hbox align="center" style="margin-bottom: 8px;">
-        <label data-l10n-id="pdferret-prefs-custom-url" style="margin-right: 10px; min-width: 80px;"/>
+        <label data-l10n-id="pdferret-prefs-custom-url" style="margin-right: 10px; min-width: 100px;"/>
         <html:input type="text" id="new-provider-url" placeholder="https://example.com/{DOI}" style="flex: 1;"/>
       </hbox>
       <hbox align="center" style="margin-bottom: 8px;">
-        <label data-l10n-id="pdferret-prefs-custom-linktext" style="margin-right: 10px; min-width: 80px;"/>
-        <html:input type="text" id="new-provider-linktext" placeholder="Download" style="flex: 1;"/>
+        <label data-l10n-id="pdferret-prefs-custom-selector" style="margin-right: 10px; min-width: 100px;"/>
+        <html:input type="text" id="new-provider-selector" placeholder="a[href*='.pdf']" style="flex: 1;"/>
       </hbox>
+      <html:p data-l10n-id="pdferret-prefs-custom-selector-help" style="margin: 0 0 8px 110px; font-size: 11px; color: #666;"/>
+      <hbox align="center" style="margin-bottom: 8px;">
+        <label data-l10n-id="pdferret-prefs-custom-attribute" style="margin-right: 10px; min-width: 100px;"/>
+        <html:input type="text" id="new-provider-attribute" placeholder="href" style="flex: 1;"/>
+      </hbox>
+      <html:p data-l10n-id="pdferret-prefs-custom-attribute-help" style="margin: 0 0 8px 110px; font-size: 11px; color: #666;"/>
       <hbox style="justify-content: flex-end; gap: 8px;">
         <button id="btn-cancel-provider" data-l10n-id="pdferret-prefs-btn-cancel" oncommand="Zotero.PDFerret.onPrefsHideAddForm(document)"/>
         <button id="btn-save-provider" data-l10n-id="pdferret-prefs-btn-save" oncommand="Zotero.PDFerret.onPrefsSaveProvider(document)"/>

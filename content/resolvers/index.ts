@@ -1,0 +1,1 @@
+export { resolverManager } from './resolverManager'

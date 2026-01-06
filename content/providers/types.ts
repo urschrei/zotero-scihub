@@ -1,5 +1,6 @@
 /**
  * Configuration for a PDF source provider.
+ * Providers are registered as Zotero PDF resolvers via extensions.zotero.findPDFs.resolvers
  */
 export interface Provider {
   /** Unique identifier for this provider */
@@ -11,11 +12,14 @@ export interface Provider {
   /** URL template with {DOI} placeholder, e.g. 'https://sci-hub.ru/{DOI}' */
   urlTemplate: string
 
-  /** Text to match for finding the download link (for simple extraction) */
-  linkText?: string
-
   /** Whether this is a built-in provider (cannot be deleted) */
   isBuiltin: boolean
+
+  /** CSS selector to find the PDF element on the provider's page */
+  selector: string
+
+  /** HTML attribute containing the PDF URL (defaults to 'src' or 'href') */
+  attribute?: string
 }
 
 /**

@@ -7,6 +7,9 @@ const progressWindowSpy = vi.fn()
 // Create mockable HTTP request function
 const httpRequestMock = vi.fn()
 
+// Create spy for addAvailablePDFs
+const addAvailablePDFsSpy = vi.fn()
+
 const Zotero: IZotero = new class {
   public PDFerret
   public initialized = true
@@ -30,12 +33,16 @@ const Zotero: IZotero = new class {
   public Prefs = new class {
     private prefs: Record<string, string | number | boolean> = {}
 
-    public get(pref: string): string | number | boolean {
+    public get(pref: string, _global?: boolean): string | number | boolean {
       return this.prefs[pref]
     }
 
-    public set(pref: string, value: string | number | boolean) {
+    public set(pref: string, value: string | number | boolean, _global?: boolean) {
       this.prefs[pref] = value
+    }
+
+    public clear() {
+      this.prefs = {}
     }
   }
 
@@ -65,6 +72,11 @@ const Zotero: IZotero = new class {
     public async importFromURL(_options: Record<string, any>): Promise<ZoteroItem> {
       return Promise.resolve(regularItem1)
     }
+
+    public async addAvailablePDFs(items: ZoteroItem[]): Promise<void> {
+      addAvailablePDFsSpy(items)
+      return Promise.resolve()
+    }
   }
 
   public Libraries = new class {
@@ -92,4 +104,4 @@ const Zotero: IZotero = new class {
   }
 }
 
-export { Zotero, progressWindowSpy, httpRequestMock }
+export { Zotero, progressWindowSpy, httpRequestMock, addAvailablePDFsSpy }
