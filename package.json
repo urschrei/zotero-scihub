@@ -36,19 +36,19 @@
     "maxVersion": "8.*"
   },
   "devDependencies": {
-    "@types/node": "^25.2.0",
+    "@types/node": "^25.3.3",
     "@vitest/coverage-v8": "^4.0.18",
-    "esbuild": "^0.27.2",
-    "eslint": "^9.39.2",
+    "esbuild": "^0.27.3",
+    "eslint": "^10.0.2",
     "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-jsdoc": "^62.5.0",
-    "globals": "^17.3.0",
-    "jsdom": "^27.4.0",
+    "eslint-plugin-jsdoc": "^62.7.1",
+    "globals": "^17.4.0",
+    "jsdom": "^28.1.0",
     "typescript": "^5.3.3",
-    "typescript-eslint": "^8.54.0",
+    "typescript-eslint": "^8.56.1",
     "vitest": "^4.0.16",
-    "zotero-plugin": "^8.0.8",
-    "zotero-plugin-toolkit": "^5.1.0-beta.13",
+    "zotero-plugin": "^9.0.1",
+    "zotero-plugin-toolkit": "^5.1.2",
     "zotero-types": "^4.0.5"
   }
 }
